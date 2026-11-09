@@ -1,0 +1,12 @@
+
+{
+  "name": "fantasy-life",
+  "version": "0.8.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
