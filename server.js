@@ -793,6 +793,8 @@ const PLACES = [
   ["국경 지대에서","Along the border"]
 ];
 
+const EMAIL = "fantasymaister@gmail.com";
+
 const LEGAL = {
   privacy: [
     ["개인정보 처리방침 — 베타 초안","Privacy Policy — Beta Draft"],
