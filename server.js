@@ -8,7 +8,7 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>운명의 대륙</title>
+<title>판타지에서 살아가기</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#10151f;color:#f4e9d0;
@@ -30,7 +30,7 @@ small{color:#aeb6c5}
 </head>
 <body>
 <main>
-<h1>⚔ 운명의 대륙</h1>
+<h1>⚔ 판타지에서 살아가기</h1>
 <p class="subtitle">당신의 운명은 태어나는 순간 시작된다.</p>
 <div class="panel" id="birth">
 <h2>새로운 생명</h2>
@@ -101,7 +101,7 @@ rank:weighted(classes),fate
 };
 document.getElementById("birthInfo").innerHTML=
 "이름: "+birth.name+"<br>종족: "+birth.race+
-"<br>신분: "+birth.rank+"<br>운명: "+birth.fate;
+"<br>신분: "+birth.rank;
 }
 function start(){
 player={...birth,age:0,money:0,skill:0,
@@ -140,7 +140,7 @@ document.getElementById("identity").textContent=
 player.name+" · "+player.age+"세";
 const values=[
 ["종족",player.race],["신분",player.rank],
-["운명",player.fate],["금화",player.money],
+["금화",player.money],
 ["검술",player.skill],["학문",player.knowledge],
 ["명성",player.prestige]
 ];
