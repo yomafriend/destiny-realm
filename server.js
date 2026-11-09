@@ -1,115 +1,108 @@
 
+"use strict";
+
 /*
  * 판타지에서 살아가기
- * Fantasy Life Simulator
+ * Life in a Fantasy World
+ * Version 1.1.0-beta
  *
- * Version: 1.0.0-beta
- * Copyright (c) 2026 Fantasy Meister.
- * All Rights Reserved.
- *
+ * © 2026 Fantasy Meister. All Rights Reserved.
  * Contact: fantasymaister@gmail.com
  *
- * 본 소프트웨어 및 관련 창작물 중 개발자가
- * 적법하게 권리를 보유한 부분에 관한 권리를
- * 유보합니다.
- *
- * 적용 법령과 제3자 라이선스에서 허용하는
- * 경우를 제외하고, 권리자의 허락 없는
- * 복제, 배포 및 상업적 이용을 금지합니다.
- *
- * 이 고지는 저작권 보호 대상이 아닌 아이디어,
- * AI 단독 생성물 또는 제3자 저작물에 대한
- * 독점적 권리를 주장하지 않습니다.
+ * 개발자가 적법하게 권리를 보유한 창작물에 관한
+ * 권리를 유보합니다. 제3자 권리, 적용 라이선스,
+ * 관련 법령상 허용되는 이용은 제외합니다.
  */
-
-"use strict";
 
 const http = require("node:http");
 const crypto = require("node:crypto");
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
+const VERSION = "1.1.0-beta";
 const EMAIL = "fantasymaister@gmail.com";
-const VERSION = "1.0.0-beta";
 
 const WORLD = [
   {
-    name: "루벨리아",
+    ko: "루벨리아",
+    en: "Rubellia",
     countries: [
-      "에테르 왕국",
-      "발테리온 제국",
-      "로젠하임 공국"
+      ["에테르 왕국", "Kingdom of Aether"],
+      ["발테리온 제국", "Valterion Empire"],
+      ["로젠하임 공국", "Duchy of Rosenheim"]
     ]
   },
   {
-    name: "실바리아",
+    ko: "실바리아",
+    en: "Sylvaria",
     countries: [
-      "엘드라실 연방",
-      "미르벨 수림왕국",
-      "하르넬 자유도시"
+      ["엘드라실 연방", "Eldrasil Federation"],
+      ["미르벨 수림왕국", "Woodland Kingdom of Mirvel"],
+      ["하르넬 자유도시", "Free City of Harnel"]
     ]
   },
   {
-    name: "카르둠",
+    ko: "카르둠",
+    en: "Kardum",
     countries: [
-      "두르가르 산악왕국",
-      "아스란 부족연맹",
-      "철관령"
+      ["두르가르 산악왕국", "Mountain Kingdom of Durgar"],
+      ["아스란 부족연맹", "Asran Tribal Confederation"],
+      ["철관령", "Iron Crown Dominion"]
     ]
   },
   {
-    name: "네크라스",
+    ko: "네크라스",
+    en: "Necras",
     countries: [
-      "벨제르 마도국",
-      "아르카스 용혈제국",
-      "사하르 상업연합"
+      ["벨제르 마도국", "Magocracy of Belzer"],
+      ["아르카스 용혈제국", "Dragonblood Empire of Arcas"],
+      ["사하르 상업연합", "Sahar Merchant Alliance"]
     ]
   },
   {
-    name: "아우렐리아",
+    ko: "아우렐리아",
+    en: "Aurelia",
     countries: [
-      "솔라리스 성국",
-      "천공도시 이스테라",
-      "고대왕조 에리온"
+      ["솔라리스 성국", "Holy State of Solaris"],
+      ["천공도시 이스테라", "Sky City of Istera"],
+      ["고대왕조 에리온", "Ancient Dynasty of Erion"]
     ]
   }
 ];
 
-const RANKS = {
-  prestige: "명성",
-  money: "재산",
-  sword: "검술",
-  magic: "마법",
-  health: "체력",
-  luck: "운",
-  children: "자녀 수",
-  military: "군사력",
-  territory: "영토",
-  intelligence: "지능",
-  adventure: "모험",
-  longevity: "장수",
-  overall: "종합"
-};
+const RANKS = [
+  ["prestige", "명성", "Renown"],
+  ["money", "재산", "Wealth"],
+  ["sword", "검술", "Swordsmanship"],
+  ["magic", "마법", "Magic"],
+  ["health", "체력", "Vitality"],
+  ["luck", "운", "Luck"],
+  ["children", "자녀 수", "Children"],
+  ["military", "군사력", "Military Power"],
+  ["territory", "영토", "Territory"],
+  ["intelligence", "지능", "Intelligence"],
+  ["adventure", "모험", "Adventure"],
+  ["longevity", "장수", "Longevity"],
+  ["overall", "종합", "Overall"]
+];
+
+const RANK_KEYS = RANKS.map(x => x[0]);
 
 let db = null;
 let dbReady = false;
 
 if (process.env.DATABASE_URL) {
-  try {
-    const { Pool } = require("pg");
+  const { Pool } = require("pg");
 
-    db = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false
-      },
-      max: 5
-    });
-  } catch (error) {
-    console.error("PostgreSQL 준비 실패:", error.message);
-  }
+  db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    },
+    max: 5
+  });
 }
 
-async function initializeDatabase() {
+async function initDB() {
   if (!db) return;
 
   try {
@@ -128,266 +121,109 @@ async function initializeDatabase() {
       )
     `);
 
-    const additionalColumns = [
-      "health",
-      "luck",
-      "children",
-      "military",
-      "territory",
-      "intelligence",
-      "adventure",
-      "longevity",
-      "overall"
-    ];
-
-    for (const column of additionalColumns) {
-      await db.query(`
-        ALTER TABLE fantasy_rankings
-        ADD COLUMN IF NOT EXISTS ${column}
-        BIGINT NOT NULL DEFAULT 0
-      `);
+    for (const key of RANK_KEYS) {
+      await db.query(
+        "ALTER TABLE fantasy_rankings " +
+        "ADD COLUMN IF NOT EXISTS " + key +
+        " BIGINT NOT NULL DEFAULT 0"
+      );
     }
 
     dbReady = true;
-    console.log("랭킹 DB 연결 완료");
+    console.log("Ranking database connected.");
   } catch (error) {
-    dbReady = false;
-    console.error("랭킹 DB 초기화 실패:", error);
+    console.error("Database error:", error.message);
   }
 }
 
 const CSS = `
-:root {
-  color-scheme: light;
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:#f6f7f9;
+  color:#263640;
+  font-family:-apple-system,BlinkMacSystemFont,
+  "Apple SD Gothic Neo","Noto Sans KR",Arial,sans-serif;
+  line-height:1.7
 }
-
-* {
-  box-sizing: border-box;
+main{max-width:950px;margin:auto;padding:25px 16px 70px}
+header{display:flex;justify-content:space-between;
+  align-items:flex-start;gap:15px;flex-wrap:wrap}
+h1{font-size:29px;letter-spacing:-1px;margin:0}
+h2{font-size:20px;margin:0 0 13px}
+h3{font-size:16px;margin:20px 0 7px}
+p{margin:10px 0}
+.muted{color:#73828b}
+.small{font-size:13px}
+.card{
+  background:#fff;
+  border:1px solid #dfe5e9;
+  border-radius:11px;
+  padding:22px;
+  margin:16px 0
 }
-
-body {
-  margin: 0;
-  background: #f6f7f8;
-  color: #27333b;
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Apple SD Gothic Neo",
-    "Noto Sans KR",
-    sans-serif;
-  line-height: 1.75;
+button{
+  border:0;
+  border-radius:7px;
+  padding:10px 15px;
+  margin:4px 4px 4px 0;
+  background:#345569;
+  color:#fff;
+  cursor:pointer;
+  font-size:14px
 }
-
-main {
-  max-width: 920px;
-  margin: auto;
-  padding: 28px 18px 70px;
+button:hover{filter:brightness(1.08)}
+button.secondary{background:#e9f0f4;color:#345569}
+button.selected{background:#345569;color:white}
+button:disabled{opacity:.5;cursor:not-allowed}
+input,select{
+  width:100%;
+  padding:11px;
+  border:1px solid #cbd5dc;
+  border-radius:7px;
+  background:white;
+  font-size:15px;
+  margin:6px 0 13px
 }
-
-h1 {
-  font-size: 29px;
-  margin: 0;
-  letter-spacing: -1px;
+label{display:block;font-weight:600;font-size:14px}
+.hidden{display:none!important}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:#f1f5f7;padding:12px;border-radius:7px}
+.stat small{display:block;color:#72818a}
+.stat strong{font-size:18px;overflow-wrap:anywhere}
+.choice{
+  display:block;
+  width:100%;
+  background:#edf3f6;
+  color:#294657;
+  border:1px solid #d4e0e6;
+  text-align:left;
+  padding:13px
 }
-
-h2 {
-  font-size: 19px;
-  margin: 0 0 12px;
+#eventCard{border-left:4px solid #829cae}
+#eventText{white-space:pre-line}
+.log{border-bottom:1px solid #e8ecef;padding:10px 0;font-size:14px}
+.rank-buttons{display:flex;flex-wrap:wrap;gap:3px}
+.rank-buttons button{font-size:12px;padding:7px 10px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;border-bottom:1px solid #e6ecef;padding:9px}
+.lang-switch{white-space:nowrap}
+.lang-switch button{padding:7px 11px}
+.notice{background:#f1f5f7;padding:13px;border-radius:7px}
+footer{
+  margin-top:35px;
+  padding-top:20px;
+  border-top:1px solid #dce4e8;
+  color:#71808a;
+  font-size:13px
 }
-
-h3 {
-  font-size: 16px;
-  margin: 22px 0 8px;
-}
-
-p {
-  margin: 10px 0;
-}
-
-.muted {
-  color: #73818a;
-}
-
-.small {
-  font-size: 13px;
-}
-
-.card {
-  background: #fff;
-  border: 1px solid #dfe4e7;
-  border-radius: 10px;
-  padding: 22px;
-  margin: 16px 0;
-}
-
-button {
-  padding: 10px 15px;
-  margin: 4px 4px 4px 0;
-  border: 0;
-  border-radius: 6px;
-  background: #344f5f;
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-button:hover {
-  filter: brightness(1.08);
-}
-
-button.secondary {
-  background: #eaf0f3;
-  color: #344a57;
-}
-
-button.danger {
-  background: #a94c4c;
-}
-
-button:disabled {
-  opacity: .45;
-  cursor: not-allowed;
-}
-
-input, select {
-  width: 100%;
-  padding: 11px;
-  margin: 6px 0 12px;
-  background: white;
-  border: 1px solid #cbd5da;
-  border-radius: 6px;
-  font-size: 15px;
-}
-
-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.hidden {
-  display: none !important;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.stat {
-  padding: 12px;
-  border-radius: 7px;
-  background: #f1f5f7;
-}
-
-.stat small {
-  display: block;
-  color: #70808a;
-}
-
-.stat strong {
-  font-size: 18px;
-  word-break: break-word;
-}
-
-.choice {
-  display: block;
-  width: 100%;
-  padding: 13px;
-  text-align: left;
-  background: #edf3f6;
-  color: #2a424f;
-  border: 1px solid #d4e0e6;
-}
-
-.choice:hover {
-  background: #dfeaf0;
-}
-
-#eventCard {
-  border-left: 4px solid #8399a7;
-}
-
-#eventText {
-  white-space: pre-line;
-}
-
-.log {
-  border-bottom: 1px solid #e8ecee;
-  padding: 10px 0;
-  font-size: 14px;
-}
-
-.rank-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.rank-buttons button {
-  padding: 7px 10px;
-  font-size: 13px;
-}
-
-.rank-buttons button.active {
-  background: #344f5f;
-  color: white;
-}
-
-.scroll {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-th, td {
-  padding: 10px 7px;
-  border-bottom: 1px solid #e5eaed;
-  text-align: left;
-}
-
-footer {
-  border-top: 1px solid #dce3e7;
-  padding-top: 22px;
-  margin-top: 40px;
-  color: #6e7c85;
-  font-size: 13px;
-}
-
-a {
-  color: #376f8d;
-  cursor: pointer;
-}
-
-footer a {
-  margin-right: 12px;
-  display: inline-block;
-}
-
-.notice {
-  background: #f1f5f7;
-  border-radius: 7px;
-  padding: 12px;
-  font-size: 13px;
-}
-
-@media(max-width: 550px) {
-  main {
-    padding: 16px 12px 60px;
-  }
-
-  .card {
-    padding: 16px;
-  }
-
-  h1 {
-    font-size: 25px;
-  }
+footer a{display:inline-block;margin-right:12px;cursor:pointer}
+a{color:#36718e}
+@media(max-width:550px){
+  main{padding:15px 12px 60px}
+  .card{padding:16px}
+  h1{font-size:24px}
 }
 `;
 
@@ -395,264 +231,125 @@ const HTML = `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width,initial-scale=1">
-
-<meta name="description"
-content="판타지 세계에서 태어나 자신만의 인생을 살아가는 웹 시뮬레이션 게임">
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A fantasy life simulation game.">
 <meta name="author" content="Fantasy Meister">
-<meta name="copyright"
-content="Copyright 2026 Fantasy Meister. All Rights Reserved.">
-
 <title>판타지에서 살아가기</title>
-
 <style>${CSS}</style>
 </head>
-
 <body>
 <main>
 
 <header>
-<h1>판타지에서 살아가기</h1>
-<p class="muted">
-당신은 이 세계에서 어떤 삶을 살게 될까요?
-</p>
+  <div>
+    <h1 id="siteTitle"></h1>
+    <p class="muted" id="siteSubtitle"></p>
+  </div>
+  <div class="lang-switch">
+    <button id="koBtn" onclick="setLanguage('ko')">한국어</button>
+    <button id="enBtn" onclick="setLanguage('en')">English</button>
+  </div>
 </header>
 
 <section id="home">
 
-<div class="card">
-<h2>새로운 인생</h2>
+  <div class="card">
+    <h2 data-t="newLife"></h2>
+    <p data-t="intro"></p>
 
-<p>
-다섯 대륙과 열다섯 국가.
-당신의 출생과 신분, 가족과 운명은
-새로운 인생마다 달라집니다.
-</p>
+    <label for="nickname" data-t="nickname"></label>
+    <input id="nickname" maxlength="16">
 
-<label for="nickname">플레이어 닉네임</label>
-<input
-id="nickname"
-maxlength="16"
-placeholder="닉네임을 입력하세요"
->
+    <label for="eraMode" data-t="era"></label>
+    <select id="eraMode" onchange="toggleEra()">
+      <option value="random" id="randomOption"></option>
+      <option value="custom" id="customOption"></option>
+    </select>
 
-<label for="eraMode">출생 시대</label>
-<select id="eraMode" onchange="toggleEra()">
-<option value="random">
-무작위 (제국력 500~1500년)
-</option>
-<option value="custom">
-직접 선택
-</option>
-</select>
+    <div id="eraCustom" class="hidden">
+      <label for="eraYear" data-t="birthYear"></label>
+      <input id="eraYear" type="number" min="500" max="1500" value="1000">
+    </div>
 
-<div id="eraCustom" class="hidden">
-<label for="eraYear">제국력 출생 연도</label>
-<input
-id="eraYear"
-type="number"
-min="500"
-max="1500"
-value="1000"
->
-</div>
+    <button onclick="newLife()" data-t="begin"></button>
+    <p class="muted small" data-t="eraNote"></p>
+  </div>
 
-<button onclick="newLife()">태어나기</button>
+  <div class="card">
+    <h2 data-t="leaderboard"></h2>
+    <p class="muted" id="rankNotice"></p>
+    <div id="rankButtons" class="rank-buttons"></div>
+    <div id="ranking" class="scroll"></div>
+    <p class="muted small" data-t="rankPrivacy"></p>
+  </div>
 
-<p class="muted small">
-출생 연도는 게임 속 시대를 결정합니다.
-이후 시간은 캐릭터의 나이에 따라 흐릅니다.
-</p>
-</div>
-
-<div class="card">
-<h2>세계 랭킹</h2>
-
-<p class="muted" id="rankNotice">
-랭킹을 불러오는 중입니다.
-</p>
-
-<div class="rank-buttons" id="rankButtons"></div>
-
-<div class="scroll" id="ranking"></div>
-
-<p class="muted small">
-세계 랭킹은 선택적으로 등록할 수 있습니다.
-등록하면 닉네임과 캐릭터 기록이 공개됩니다.
-</p>
-</div>
-
-<div class="card">
-<h2>게임 소개</h2>
-
-<h3>출생과 신분</h3>
-<p>
-인간, 엘프, 드워프, 수인, 마족, 용인족,
-정령족, 천족, 고대종 등 다양한 종족으로
-태어날 수 있습니다.
-</p>
-
-<p>
-농노에서 왕족까지 출생 신분이 존재합니다.
-하지만 출생이 최종적인 운명을 결정하지는 않습니다.
-</p>
-
-<h3>성장과 역전</h3>
-<p>
-검술, 마법, 체력과 여러 능력치는
-고정된 성장 상한이 없습니다.
-</p>
-
-<p>
-평범한 농노도 극히 드문 기연과
-오랜 노력으로 세계 최고의 인물이 될 수 있습니다.
-</p>
-
-<h3>인생의 사건</h3>
-<p>
-성장, 가족, 질병, 재난, 전쟁, 모험,
-고대 유적, 마법과 같은 사건을 경험합니다.
-</p>
-
-<p>
-같은 사건도 선택과 능력, 운에 따라
-다른 결과로 이어집니다.
-</p>
-
-<h3>죽음과 기록</h3>
-<p>
-종족마다 수명이 다르며
-질병이나 사고로 일찍 사망할 수도 있습니다.
-</p>
-
-<p>
-살아온 인생은 연대기에 기록되고,
-원하는 경우 세계 랭킹에 등록할 수 있습니다.
-</p>
-</div>
+  <div class="card">
+    <h2 data-t="about"></h2>
+    <h3 data-t="birthHeading"></h3>
+    <p data-t="birthDescription"></p>
+    <h3 data-t="growthHeading"></h3>
+    <p data-t="growthDescription"></p>
+    <h3 data-t="eventHeading"></h3>
+    <p data-t="eventDescription"></p>
+    <h3 data-t="deathHeading"></h3>
+    <p data-t="deathDescription"></p>
+  </div>
 
 </section>
 
 <section id="game" class="hidden">
 
-<div class="card">
+  <div class="card">
+    <h2 id="charTitle"></h2>
+    <p id="gameDate"></p>
+    <p id="charInfo" class="muted"></p>
+    <p id="familyInfo"></p>
 
-<h2 id="charTitle"></h2>
-<p id="gameDate"></p>
-<p id="charInfo" class="muted"></p>
-<p id="familyInfo"></p>
+    <div class="grid" id="stats"></div>
+    <p id="lifeStatus" class="muted"></p>
 
-<div class="grid" id="stats"></div>
+    <button onclick="togglePause()" data-t="pause"></button>
+    <button onclick="changeSpeed()" id="speedButton"></button>
+    <button onclick="toggleAuto()" id="autoButton"></button>
+    <button onclick="publishRank()" data-t="publish"></button>
+    <button class="secondary" onclick="goHome()" data-t="home"></button>
+  </div>
 
-<p id="lifeStatus" class="muted"></p>
+  <div class="card" id="eventCard">
+    <h2 id="eventTitle"></h2>
+    <p id="eventText"></p>
+    <div id="choices"></div>
+  </div>
 
-<button onclick="togglePause()">
-일시정지 / 계속
-</button>
-
-<button onclick="changeSpeed()">
-속도 변경
-</button>
-
-<button onclick="toggleAuto()">
-자동 결정
-</button>
-
-<button onclick="publishRank()">
-세계 랭킹 등록
-</button>
-
-<button class="secondary" onclick="goHome()">
-첫 화면
-</button>
-
-</div>
-
-<div class="card" id="eventCard">
-
-<h2 id="eventTitle"></h2>
-<p id="eventText"></p>
-
-<div id="choices"></div>
-
-</div>
-
-<div class="card">
-<h2>인생 연대기</h2>
-<div id="history"></div>
-</div>
+  <div class="card">
+    <h2 data-t="chronicle"></h2>
+    <div id="history"></div>
+  </div>
 
 </section>
 
 <section id="legal" class="card hidden">
-
-<button class="secondary" onclick="showPage('home')">
-돌아가기
-</button>
-
-<h2 id="legalTitle"></h2>
-<div id="legalBody"></div>
-
+  <button class="secondary" onclick="backFromLegal()" data-t="back"></button>
+  <h2 id="legalTitle"></h2>
+  <div id="legalBody"></div>
 </section>
 
 <footer>
-
-<p>
-<strong>판타지에서 살아가기</strong>
-· ${VERSION}
-</p>
-
-<p>
-<a onclick="showLegal('privacy')">
-개인정보 처리방침
-</a>
-
-<a onclick="showLegal('terms')">
-이용약관
-</a>
-
-<a onclick="showLegal('copyright')">
-저작권 안내
-</a>
-
-<a onclick="showLegal('notice')">
-운영 안내
-</a>
-
-<a onclick="showLegal('updates')">
-업데이트 내역
-</a>
-
-<a href="mailto:${EMAIL}">
-문의하기
-</a>
-</p>
-
-<p>
-© 2026 Fantasy Meister.
-All Rights Reserved.
-</p>
-
-<p>
-본 게임에서 개발자가 적법하게 권리를 보유한
-독창적인 세계관, 스토리, 캐릭터,
-텍스트, 디자인 및 소스코드에 관한
-권리는 개발자에게 있습니다.
-</p>
-
-<p>
-관련 법령과 적용 라이선스에서 허용하는 경우를 제외하고,
-권리자의 허락 없는 무단 복제, 재배포,
-전송 및 상업적 이용을 금지합니다.
-</p>
-
-<p>
-저작권 및 서비스 문의:
-<a href="mailto:${EMAIL}">${EMAIL}</a>
-</p>
-
+  <p><strong id="footerTitle"></strong> · ${VERSION}</p>
+  <p>
+    <a onclick="showLegal('privacy')" data-t="privacy"></a>
+    <a onclick="showLegal('terms')" data-t="terms"></a>
+    <a onclick="showLegal('copyright')" data-t="copyright"></a>
+    <a onclick="showLegal('notice')" data-t="notice"></a>
+    <a onclick="showLegal('updates')" data-t="updates"></a>
+    <a href="mailto:${EMAIL}" data-t="contact"></a>
+  </p>
+  <p>© 2026 Fantasy Meister. All Rights Reserved.</p>
+  <p data-t="rightsNotice"></p>
+  <p>
+    <span data-t="rightsContact"></span>:
+    <a href="mailto:${EMAIL}">${EMAIL}</a>
+  </p>
 </footer>
 
 </main>
@@ -661,47 +358,265 @@ All Rights Reserved.
 "use strict";
 
 const $ = id => document.getElementById(id);
-
-const pick = arr =>
-  arr[Math.floor(Math.random() * arr.length)];
-
-const rnd = (min, max) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
 
 const WORLD = ${JSON.stringify(WORLD)};
 const RANKS = ${JSON.stringify(RANKS)};
-
 const SAVE_KEY = "fantasy-life-v100";
+const LANG_KEY = "fantasy-life-language";
+
+const TEXT = {
+  ko: {
+    title:"판타지에서 살아가기",
+    subtitle:"당신은 이 세계에서 어떤 삶을 살게 될까요?",
+    newLife:"새로운 인생",
+    intro:"다섯 대륙과 열다섯 국가. 당신의 출생과 신분, 가족과 운명은 새로운 인생마다 달라집니다.",
+    nickname:"플레이어 닉네임",
+    nicknamePlaceholder:"닉네임을 입력하세요",
+    era:"출생 시대",
+    randomEra:"무작위 (제국력 500~1500년)",
+    customEra:"직접 선택",
+    birthYear:"제국력 출생 연도",
+    begin:"태어나기",
+    eraNote:"출생 연도는 게임 속 시대를 결정합니다.",
+    leaderboard:"세계 랭킹",
+    rankPrivacy:"랭킹 등록은 선택 사항이며, 등록한 닉네임과 캐릭터 기록은 공개됩니다.",
+    about:"게임 소개",
+    birthHeading:"출생과 신분",
+    birthDescription:"다양한 종족과 신분으로 태어납니다. 농노부터 왕족까지, 출생은 다르지만 미래가 정해진 것은 아닙니다.",
+    growthHeading:"성장과 역전",
+    growthDescription:"검술, 마법, 체력 등 능력치에는 고정된 성장 상한이 없습니다. 평범한 농노도 세계 최고의 인물이 될 수 있습니다.",
+    eventHeading:"인생의 사건",
+    eventDescription:"가족, 질병, 전쟁, 모험, 고대 유적과 마법의 사건을 겪습니다. 선택에 따라 결과가 달라집니다.",
+    deathHeading:"죽음과 기록",
+    deathDescription:"종족마다 수명이 다릅니다. 삶의 기록은 연대기에 남고, 원하는 경우 세계 랭킹에 등록할 수 있습니다.",
+    pause:"일시정지 / 계속",
+    speed:"속도",
+    auto:"자동 결정",
+    on:"켜짐",
+    off:"꺼짐",
+    publish:"세계 랭킹 등록",
+    home:"첫 화면",
+    chronicle:"인생 연대기",
+    back:"돌아가기",
+    privacy:"개인정보 처리방침",
+    terms:"이용약관",
+    copyright:"저작권 안내",
+    notice:"운영 안내",
+    updates:"업데이트 내역",
+    contact:"문의하기",
+    rightsNotice:"개발자가 적법하게 권리를 보유한 창작물에 관한 권리를 유보합니다. 법령 및 제3자 라이선스에서 허용하는 이용은 제외합니다.",
+    rightsContact:"저작권 및 서비스 문의",
+    enterNick:"닉네임을 입력해 주세요.",
+    invalidYear:"출생 연도는 제국력 500~1500년 사이여야 합니다.",
+    birthEvent:"0세 — 탄생",
+    birthChoice:"이 가정에서 살아간다",
+    act:"적극적으로 해결한다",
+    investigate:"신중하게 조사한다",
+    avoid:"관여하지 않는다",
+    age:"세",
+    imperial:"제국력",
+    father:"아버지",
+    mother:"어머니",
+    family:"가족",
+    hp:"체력",
+    mp:"마력",
+    sp:"기력",
+    sword:"검술",
+    magic:"마법",
+    intelligence:"지능",
+    strength:"근력",
+    agility:"민첩",
+    prestige:"명성",
+    money:"재산",
+    luck:"운",
+    children:"자녀 수",
+    military:"군사력",
+    territory:"영토",
+    adventure:"모험",
+    overall:"종합 점수",
+    dead:"인생 종료 · 사망",
+    waiting:"선택을 기다리는 중",
+    paused:"일시정지",
+    running:"시간 진행 중",
+    loading:"랭킹을 불러오는 중...",
+    unavailable:"공용 랭킹 데이터베이스가 연결되지 않았습니다.",
+    empty:"아직 등록된 기록이 없습니다.",
+    rankError:"랭킹을 불러오지 못했습니다.",
+    rankPosition:"순위",
+    player:"플레이어",
+    character:"캐릭터",
+    score:"점수",
+    rankConfirm:"세계 랭킹에 등록하시겠습니까? 닉네임, 캐릭터 이름, 종족, 나이와 점수가 공개됩니다.",
+    rankSuccess:"세계 랭킹에 기록을 등록했습니다.",
+    rankFail:"랭킹 등록에 실패했습니다.",
+    homeConfirm:"정말로 처음으로 돌아가시겠습니까?\\n\\n현재 인생의 브라우저 저장 기록이 삭제되며 복구할 수 없습니다. 이미 등록한 세계 랭킹 기록은 삭제되지 않습니다.",
+    yearReached:"{age}세가 되었다.",
+    bornLog:"이 세계에 태어났다.",
+    startLog:"가족과 함께 인생을 시작했다.",
+    childLog:"가족에게 새로운 자녀가 태어났다.",
+    eventLog:"{title} 사건이 발생했다.",
+    eventPrompt:"당신은 어떻게 행동하시겠습니까?",
+    success:"위험을 감수한 끝에 성공했다. 보상과 경험을 얻었다.",
+    failure:"도전했지만 실패했다. 부상과 손실을 입었다.",
+    carefulSuccess:"신중한 판단으로 좋은 결과를 얻었다.",
+    carefulFailure:"신중하게 접근했지만 원하는 결과를 얻지 못했다.",
+    walkAway:"사건에 관여하지 않고 지나갔다.",
+    minorDamage:"하지만 피해를 완전히 피하지는 못했다.",
+    breakthrough:"전설적인 기연을 만나 능력이 폭발적으로 성장했다.",
+    omen:"자신의 숨겨진 운명에 관한 기묘한 징조를 느꼈다.",
+    freedom:"공적을 인정받아 농노 신분에서 벗어났다.",
+    nobility:"특별한 공적으로 귀족 작위를 받았다.",
+    landGrant:"영지와 병력을 하사받았다.",
+    deathOld:"노화",
+    deathHealth:"건강 악화",
+    deathInjury:"사건 중 입은 부상",
+    died:"{reason}으로 생을 마감했다.",
+    birthStory:"제국력 {year}년 1월 1일.\\n\\n당신은 {continent} 대륙의 {country}에서 태어났습니다.\\n\\n아버지 {father}은(는) {fatherJob} 일을 하는 {fatherTrait} 사람입니다.\\n어머니 {mother}은(는) {motherJob} 일을 하는 {motherTrait} 사람입니다.\\n\\n당신의 가정은 {social} 계층에 속합니다. 부모님은 각자의 형편 속에서 새로운 생명을 맞이했습니다.",
+    eventText:"{place} {description}\\n\\n{prompt}"
+  },
+
+  en: {
+    title:"Life in a Fantasy World",
+    subtitle:"What kind of life will you lead in this world?",
+    newLife:"A New Life",
+    intro:"Five continents. Fifteen nations. Every life begins with a different birthplace, social standing, family, and destiny.",
+    nickname:"Player Nickname",
+    nicknamePlaceholder:"Enter your nickname",
+    era:"Starting Era",
+    randomEra:"Random (Imperial Year 500–1500)",
+    customEra:"Choose a Year",
+    birthYear:"Year of Birth",
+    begin:"Begin Your Life",
+    eraNote:"Your birth year determines when your story begins.",
+    leaderboard:"Global Leaderboards",
+    rankPrivacy:"Leaderboard submission is optional. Submitted nicknames and character records are publicly visible.",
+    about:"About the Game",
+    birthHeading:"Birth and Social Standing",
+    birthDescription:"Be born into one of several races and social classes, from serfdom to royalty. Your origins do not determine your future.",
+    growthHeading:"Growth and Greatness",
+    growthDescription:"Swordsmanship, magic, vitality, and other abilities have no fixed growth ceiling. Even a humble serf can become the greatest figure in the world.",
+    eventHeading:"Life-Changing Events",
+    eventDescription:"Experience family milestones, disease, war, adventures, ancient ruins, and magic. Your decisions shape the outcome.",
+    deathHeading:"Death and Legacy",
+    deathDescription:"Each race has its own lifespan. Your life is recorded in a chronicle, and you may choose to enter the global leaderboards.",
+    pause:"Pause / Resume",
+    speed:"Speed",
+    auto:"Auto Decisions",
+    on:"On",
+    off:"Off",
+    publish:"Submit to Leaderboards",
+    home:"Main Menu",
+    chronicle:"Life Chronicle",
+    back:"Go Back",
+    privacy:"Privacy Policy",
+    terms:"Terms of Service",
+    copyright:"Copyright Notice",
+    notice:"Service Information",
+    updates:"Update History",
+    contact:"Contact",
+    rightsNotice:"Rights are reserved in original works lawfully owned by the developer, subject to applicable law and third-party licenses.",
+    rightsContact:"Copyright and Service Inquiries",
+    enterNick:"Please enter a nickname.",
+    invalidYear:"Choose a birth year between Imperial Years 500 and 1500.",
+    birthEvent:"Age 0 — A New Beginning",
+    birthChoice:"Begin life with this family",
+    act:"Take decisive action",
+    investigate:"Investigate carefully",
+    avoid:"Stay out of it",
+    age:"years old",
+    imperial:"Imperial Year",
+    father:"Father",
+    mother:"Mother",
+    family:"Family",
+    hp:"Vitality",
+    mp:"Mana",
+    sp:"Stamina",
+    sword:"Swordsmanship",
+    magic:"Magic",
+    intelligence:"Intelligence",
+    strength:"Strength",
+    agility:"Agility",
+    prestige:"Renown",
+    money:"Wealth",
+    luck:"Luck",
+    children:"Children",
+    military:"Military Power",
+    territory:"Territory",
+    adventure:"Adventure",
+    overall:"Overall Score",
+    dead:"Life Ended · Deceased",
+    waiting:"Awaiting your decision",
+    paused:"Paused",
+    running:"Time is passing",
+    loading:"Loading leaderboards...",
+    unavailable:"The leaderboard database is currently unavailable.",
+    empty:"No records have been submitted yet.",
+    rankError:"Unable to load the leaderboards.",
+    rankPosition:"Rank",
+    player:"Player",
+    character:"Character",
+    score:"Score",
+    rankConfirm:"Submit your record to the global leaderboards? Your nickname, character name, race, age, and scores will be publicly visible.",
+    rankSuccess:"Your record has been submitted.",
+    rankFail:"Unable to submit your record.",
+    homeConfirm:"Return to the main menu?\\n\\nYour current life and its locally saved progress will be permanently deleted. Previously submitted leaderboard records will remain.",
+    yearReached:"You turned {age}.",
+    bornLog:"You were born into this world.",
+    startLog:"Your life with your family began.",
+    childLog:"A new child was born into your family.",
+    eventLog:"An event occurred: {title}.",
+    eventPrompt:"What will you do?",
+    success:"You took a risk and succeeded, gaining experience and rewards.",
+    failure:"Your attempt failed, leaving you injured and poorer.",
+    carefulSuccess:"Your careful judgment paid off.",
+    carefulFailure:"Despite your caution, things did not go as planned.",
+    walkAway:"You chose not to get involved.",
+    minorDamage:"Even so, you could not avoid all the harm.",
+    breakthrough:"A fateful encounter granted you an extraordinary surge of power.",
+    omen:"You sensed an unsettling sign of your hidden destiny.",
+    freedom:"Your achievements earned you freedom from serfdom.",
+    nobility:"Your exceptional service earned you a noble title.",
+    landGrant:"You were granted land and soldiers.",
+    deathOld:"old age",
+    deathHealth:"declining health",
+    deathInjury:"injuries sustained during an incident",
+    died:"Your life came to an end due to {reason}.",
+    birthStory:"Imperial Year {year}, January 1.\\n\\nYou were born in {country}, on the continent of {continent}.\\n\\nYour father, {father}, is a {fatherTrait} {fatherJob}.\\nYour mother, {mother}, is a {motherTrait} {motherJob}.\\n\\nYour family belongs to the {social} class. Whatever their circumstances, your parents welcome a new life into the world.",
+    eventText:"{place}, {description}\\n\\n{prompt}"
+  }
+};
 
 const RACES = [
-  ["인간",65,65,105],
-  ["엘프",12,250,500],
-  ["드워프",8,130,230],
-  ["수인",6,55,105],
-  ["마족",4,150,320],
-  ["용인족",2.5,220,450],
-  ["정령족",1.5,300,650],
-  ["천족",0.7,350,750],
-  ["고대종",0.3,500,1000]
+  ["인간","Human",65,65,105],
+  ["엘프","Elf",12,250,500],
+  ["드워프","Dwarf",8,130,230],
+  ["수인","Beastkin",6,55,105],
+  ["마족","Demonkin",4,150,320],
+  ["용인족","Dragonkin",2.5,220,450],
+  ["정령족","Spiritkin",1.5,300,650],
+  ["천족","Celestial",0.7,350,750],
+  ["고대종","Ancient One",0.3,500,1000]
 ];
 
 const CLASSES = [
-  ["농노",42],
-  ["평민",27],
-  ["상인 가문",14],
-  ["하급 귀족",10],
-  ["상급 귀족",5],
-  ["왕족",2]
+  ["농노","Serf",42],
+  ["평민","Commoner",27],
+  ["상인 가문","Merchant Family",14],
+  ["하급 귀족","Lesser Nobility",10],
+  ["상급 귀족","High Nobility",5],
+  ["왕족","Royalty",2]
 ];
 
 const FATES = [
-  ["전생자",0.025],
-  ["회귀자",0.020],
-  ["마왕의 환생",0.015],
-  ["용의 화신",0.015],
-  ["신의 사도",0.010],
-  ["세계의 오류",0.005],
-  ["용사의 운명",0.010]
+  ["전생자","Reincarnator",0.025],
+  ["회귀자","Regressor",0.020],
+  ["마왕의 환생","Reincarnation of the Demon King",0.015],
+  ["용의 화신","Avatar of the Dragon",0.015],
+  ["신의 사도","Divine Apostle",0.010],
+  ["세계의 오류","Anomaly of the World",0.005],
+  ["용사의 운명","Destined Hero",0.010]
 ];
 
 const FIRST_NAMES = [
@@ -713,6 +628,15 @@ const FIRST_NAMES = [
   "델","유리아","칼렌","페르","이안"
 ];
 
+const EN_NAMES = [
+  "Kyle","Leon","Arlen","Elin","Celia",
+  "Luca","Nael","Bella","Dran","Rael",
+  "Theo","Orin","Lina","Eren","Mia",
+  "Harin","Silen","Ren","Var","Dion",
+  "Anna","Kiel","Jeron","Roa","Sharin",
+  "Del","Yuria","Kalen","Fer","Ian"
+];
+
 const SURNAMES = [
   "아르벨","아르덴","벨하임","로젠",
   "카르딘","에르빈","델피아","실바",
@@ -721,227 +645,470 @@ const SURNAMES = [
   "에리온","솔라리스","드라켄","루미엘"
 ];
 
+const EN_SURNAMES = [
+  "Arvel","Arden","Belheim","Rosen",
+  "Kardin","Ervin","Delphia","Silva",
+  "Leona","Eldra","Mirvel","Valter",
+  "Harnel","Belzer","Asran","Arcas",
+  "Erion","Solaris","Draken","Lumiel"
+];
+
 const JOBS = [
-  "농부","목수","상인","대장장이",
-  "사냥꾼","병사","재봉사","약초사",
-  "마법사","서기관","어부","광부",
-  "여관 주인","기사","성직자"
+  ["농부","farmer"],["목수","carpenter"],
+  ["상인","merchant"],["대장장이","blacksmith"],
+  ["사냥꾼","hunter"],["병사","soldier"],
+  ["재봉사","tailor"],["약초사","herbalist"],
+  ["마법사","mage"],["서기관","scribe"],
+  ["어부","fisher"],["광부","miner"],
+  ["여관 주인","innkeeper"],["기사","knight"],
+  ["성직자","cleric"]
 ];
 
 const TRAITS = [
-  "다정한","엄격한","성실한",
-  "과묵한","명랑한","신중한",
-  "고집 센","온화한","용감한",
-  "욕심 많은","현명한","소심한"
+  ["다정한","kind-hearted"],
+  ["엄격한","strict"],
+  ["성실한","hardworking"],
+  ["과묵한","quiet"],
+  ["명랑한","cheerful"],
+  ["신중한","cautious"],
+  ["고집 센","stubborn"],
+  ["온화한","gentle"],
+  ["용감한","brave"],
+  ["욕심 많은","ambitious"],
+  ["현명한","wise"],
+  ["소심한","timid"]
 ];
 
 const EVENTS = [
-  {
-    title:"산적의 습격",
-    text:"여행 중 산적 무리를 마주쳤다.",
-    kind:"bad",
-    ability:"sword"
-  },
-  {
-    title:"고대 유적",
-    text:"숲 깊은 곳에서 고대 유적이 발견되었다.",
-    kind:"mixed",
-    ability:"adventure"
-  },
-  {
-    title:"검술 스승",
-    text:"뛰어난 검사가 제자를 모집하고 있다.",
-    kind:"good",
-    ability:"sword"
-  },
-  {
-    title:"마탑의 초대",
-    text:"마탑에서 재능 있는 인물을 찾고 있다.",
-    kind:"good",
-    ability:"magic"
-  },
-  {
-    title:"전염병",
-    text:"마을에 원인을 알 수 없는 병이 퍼졌다.",
-    kind:"bad",
-    ability:"health"
-  },
-  {
-    title:"왕실의 포상",
-    text:"왕실에서 공로자를 찾고 있다.",
-    kind:"good",
-    ability:"prestige"
-  },
-  {
-    title:"상단의 제안",
-    text:"거대한 상단에서 거래를 제안했다.",
-    kind:"good",
-    ability:"money"
-  },
-  {
-    title:"정령의 축복",
-    text:"작은 정령이 당신 앞에 나타났다.",
-    kind:"good",
-    ability:"magic"
-  },
-  {
-    title:"대지진",
-    text:"땅이 흔들리고 건물이 무너지기 시작했다.",
-    kind:"bad",
-    ability:"health"
-  },
-  {
-    title:"전쟁 발발",
-    text:"국경에서 전쟁이 시작되었다.",
-    kind:"bad",
-    ability:"military"
-  },
-  {
-    title:"귀족의 음모",
-    text:"귀족들의 권력 다툼에 휘말렸다.",
-    kind:"mixed",
-    ability:"intelligence"
-  },
-  {
-    title:"마법서 발견",
-    text:"봉인된 고대 마법서를 발견했다.",
-    kind:"mixed",
-    ability:"magic"
-  },
-  {
-    title:"숨겨진 보물",
-    text:"오래된 보물 지도를 발견했다.",
-    kind:"good",
-    ability:"adventure"
-  },
-  {
-    title:"왕국의 반란",
-    text:"지방 영주들이 반란을 일으켰다.",
-    kind:"bad",
-    ability:"military"
-  },
-  {
-    title:"용의 흔적",
-    text:"산맥에서 고대 용의 흔적이 발견되었다.",
-    kind:"mixed",
-    ability:"magic"
-  },
-  {
-    title:"영지의 위기",
-    text:"후계자를 잃은 영지가 혼란에 빠졌다.",
-    kind:"mixed",
-    ability:"territory"
-  },
-  {
-    title:"희귀 광맥",
-    text:"버려진 광산에서 희귀 광석이 발견되었다.",
-    kind:"good",
-    ability:"money"
-  },
-  {
-    title:"기사단 모집",
-    text:"왕국 기사단에서 새로운 단원을 모집한다.",
-    kind:"good",
-    ability:"sword"
-  },
-  {
-    title:"신전의 계시",
-    text:"신전에서 특별한 계시가 내려왔다.",
-    kind:"mixed",
-    ability:"luck"
-  },
-  {
-    title:"괴수 출현",
-    text:"변방 마을에 거대한 괴수가 나타났다.",
-    kind:"bad",
-    ability:"sword"
-  },
-  {
-    title:"무역 호황",
-    text:"새로운 교역로가 열렸다.",
-    kind:"good",
-    ability:"money"
-  },
-  {
-    title:"왕위 분쟁",
-    text:"왕실에서 후계자 다툼이 시작되었다.",
-    kind:"mixed",
-    ability:"prestige"
-  },
-  {
-    title:"대화재",
-    text:"시장에 큰불이 났다.",
-    kind:"bad",
-    ability:"health"
-  },
-  {
-    title:"치유의 샘",
-    text:"병을 낫게 한다는 샘이 발견되었다.",
-    kind:"good",
-    ability:"health"
-  },
-  {
-    title:"비밀 연구",
-    text:"마법사가 위험한 연구를 제안했다.",
-    kind:"mixed",
-    ability:"intelligence"
-  }
+  ["bandits","산적의 습격","Bandit Ambush",
+    "여행 중 산적 무리를 마주쳤다.",
+    "a band of outlaws blocks your path.",
+    "sword","bad"],
+  ["ruins","고대 유적","Ancient Ruins",
+    "숲 깊은 곳에서 고대 유적이 발견되었다.",
+    "you discover the remains of an ancient civilization.",
+    "adventure","mixed"],
+  ["master","검술 스승","A Swordmaster's Offer",
+    "뛰어난 검사가 제자를 모집하고 있다.",
+    "a renowned swordsman is searching for an apprentice.",
+    "sword","good"],
+  ["tower","마탑의 초대","Invitation from the Mage Tower",
+    "마탑에서 재능 있는 인물을 찾고 있다.",
+    "the Mage Tower is seeking promising new talent.",
+    "magic","good"],
+  ["plague","전염병","Outbreak of Disease",
+    "마을에 원인을 알 수 없는 병이 퍼졌다.",
+    "a mysterious illness is spreading through the village.",
+    "health","bad"],
+  ["royal","왕실의 포상","Royal Recognition",
+    "왕실에서 공로자를 찾고 있다.",
+    "the royal court is searching for worthy individuals to reward.",
+    "prestige","good"],
+  ["trade","상단의 제안","A Merchant's Proposal",
+    "거대한 상단에서 거래를 제안했다.",
+    "a powerful merchant guild offers you a business opportunity.",
+    "money","good"],
+  ["spirit","정령의 축복","Blessing of a Spirit",
+    "작은 정령이 당신 앞에 나타났다.",
+    "a mysterious spirit appears before you.",
+    "magic","good"],
+  ["quake","대지진","Earthquake",
+    "땅이 흔들리고 건물이 무너지기 시작했다.",
+    "the ground trembles as nearby buildings begin to collapse.",
+    "health","bad"],
+  ["war","전쟁 발발","Outbreak of War",
+    "국경에서 전쟁이 시작되었다.",
+    "war erupts along the border.",
+    "military","bad"],
+  ["plot","귀족의 음모","Noble Conspiracy",
+    "귀족들의 권력 다툼에 휘말렸다.",
+    "you become entangled in a struggle for power among nobles.",
+    "intelligence","mixed"],
+  ["grimoire","마법서 발견","Forbidden Grimoire",
+    "봉인된 고대 마법서를 발견했다.",
+    "you discover an ancient spellbook sealed by forgotten magic.",
+    "magic","mixed"],
+  ["treasure","숨겨진 보물","Hidden Treasure",
+    "오래된 보물 지도를 발견했다.",
+    "you come across a weathered treasure map.",
+    "adventure","good"],
+  ["rebellion","왕국의 반란","Rebellion",
+    "지방 영주들이 반란을 일으켰다.",
+    "several provincial lords rise against the crown.",
+    "military","bad"],
+  ["dragon","용의 흔적","Traces of a Dragon",
+    "산맥에서 고대 용의 흔적이 발견되었다.",
+    "signs of an ancient dragon emerge in the mountains.",
+    "magic","mixed"],
+  ["estate","영지의 위기","A Lordless Estate",
+    "후계자를 잃은 영지가 혼란에 빠졌다.",
+    "an estate falls into chaos after its heir disappears.",
+    "territory","mixed"],
+  ["ore","희귀 광맥","Rare Ore Vein",
+    "버려진 광산에서 희귀 광석이 발견되었다.",
+    "valuable ore is discovered in an abandoned mine.",
+    "money","good"],
+  ["knights","기사단 모집","The Knightly Order",
+    "왕국 기사단에서 새로운 단원을 모집한다.",
+    "the kingdom's knights are recruiting new members.",
+    "sword","good"],
+  ["oracle","신전의 계시","Oracle of the Temple",
+    "신전에서 특별한 계시가 내려왔다.",
+    "the temple announces a mysterious prophecy.",
+    "luck","mixed"],
+  ["beast","괴수 출현","Monstrous Threat",
+    "변방 마을에 거대한 괴수가 나타났다.",
+    "a terrifying creature appears near a frontier village.",
+    "sword","bad"],
+  ["commerce","무역 호황","Trade Boom",
+    "새로운 교역로가 열렸다.",
+    "a newly opened trade route promises great opportunities.",
+    "money","good"],
+  ["succession","왕위 분쟁","Succession Crisis",
+    "왕실에서 후계자 다툼이 시작되었다.",
+    "rival heirs begin fighting for the throne.",
+    "prestige","mixed"],
+  ["fire","대화재","Great Fire",
+    "시장에 큰불이 났다.",
+    "a devastating fire sweeps through the marketplace.",
+    "health","bad"],
+  ["spring","치유의 샘","Healing Spring",
+    "병을 낫게 한다는 샘이 발견되었다.",
+    "a spring said to cure illness has been discovered.",
+    "health","good"],
+  ["research","비밀 연구","Secret Research",
+    "마법사가 위험한 연구를 제안했다.",
+    "a mage invites you to participate in a dangerous experiment.",
+    "intelligence","mixed"]
 ];
 
 const PLACES = [
-  "왕국의 변방에서",
-  "오래된 숲에서",
-  "수도 근처에서",
-  "작은 마을에서",
-  "산맥 너머에서",
-  "고대 유적 근처에서",
-  "상업 도시에서",
-  "국경 지대에서"
+  ["왕국의 변방에서","On the kingdom's frontier"],
+  ["오래된 숲에서","Deep within an ancient forest"],
+  ["수도 근처에서","Near the capital"],
+  ["작은 마을에서","In a quiet village"],
+  ["산맥 너머에서","Beyond the mountains"],
+  ["고대 유적 근처에서","Near forgotten ruins"],
+  ["상업 도시에서","In a bustling trading city"],
+  ["국경 지대에서","Along the border"]
 ];
+
+const LEGAL = {
+  privacy: [
+    ["개인정보 처리방침 — 베타 초안","Privacy Policy — Beta Draft"],
+    [
+      "처리 목적",
+      "게임 진행, 선택적 랭킹 운영 및 문의 대응을 위해 필요한 정보를 처리합니다.",
+      "Purpose of Processing",
+      "Information is processed to operate the game, maintain optional leaderboards, and respond to inquiries."
+    ],
+    [
+      "처리 정보",
+      "게임 진행 정보는 브라우저에 저장됩니다. 랭킹 등록 시 닉네임, 캐릭터 이름, 종족, 나이 및 점수가 서버에 저장됩니다. 호스팅 과정에서 IP 주소와 접속 기록 등이 처리될 수 있습니다.",
+      "Information Collected",
+      "Game progress is stored in your browser. Optional leaderboard submissions store your nickname, character name, race, age, and scores on the server. Hosting providers may also process IP addresses and access logs."
+    ],
+    [
+      "공개 및 보유",
+      "랭킹 기록은 다른 이용자에게 공개됩니다. 서버 기록의 구체적인 보유 기간은 정식 운영 전에 확정해야 합니다.",
+      "Publication and Retention",
+      "Submitted leaderboard records are publicly visible. A definitive server-side retention period must be established before full release."
+    ],
+    [
+      "삭제 요청",
+      "개인정보 열람, 정정, 삭제 및 처리정지 요청은 이메일로 문의할 수 있습니다. 랭킹 삭제 시 기록 소유권 확인이 필요할 수 있습니다.",
+      "Your Rights",
+      "You may request access, correction, deletion, or restriction of personal data by email. Ownership verification may be required for leaderboard deletion."
+    ],
+    [
+      "호스팅 및 국외 처리",
+      "Render 호스팅 및 PostgreSQL을 사용합니다. 실제 위탁 및 국외 이전에 관한 세부 사항은 확인 후 고지해야 합니다.",
+      "Hosting and International Processing",
+      "The service uses Render hosting and PostgreSQL. Details of actual processors and international data transfers must be verified and disclosed."
+    ],
+    [
+      "문의",
+      EMAIL,
+      "Contact",
+      EMAIL
+    ],
+    [
+      "시행 안내",
+      "본 문서는 베타 초안이며 정식 운영 전 실제 개인정보 처리 현황에 맞게 보완해야 합니다.",
+      "Important Notice",
+      "This is a beta draft and must be finalized to reflect actual data processing practices before full release."
+    ]
+  ],
+
+  terms: [
+    ["이용약관 — 베타 초안","Terms of Service — Beta Draft"],
+    [
+      "서비스 내용",
+      "본 서비스는 가상의 판타지 세계에서 인물의 삶을 체험하는 무료 베타 시뮬레이션 게임입니다.",
+      "Service Description",
+      "This is a free beta simulation game in which players experience a character's life in a fictional fantasy world."
+    ],
+    [
+      "게임 기록",
+      "게임 진행 기록은 브라우저에 저장되며 기기 변경이나 브라우저 데이터 삭제로 유실될 수 있습니다.",
+      "Saved Progress",
+      "Progress is stored in your browser and may be lost if you change devices or clear browser data."
+    ],
+    [
+      "랭킹 이용",
+      "타인 사칭, 부정한 점수 조작, 서버 공격 및 서비스 운영 방해 행위를 금지합니다.",
+      "Leaderboard Conduct",
+      "Impersonation, fraudulent score manipulation, attacks on the server, and interference with the service are prohibited."
+    ],
+    [
+      "저작권",
+      "개발자가 적법하게 권리를 보유한 창작물의 저작권은 해당 권리자에게 있습니다. 관련 법령과 제3자 라이선스에서 허용되는 이용은 제외합니다.",
+      "Copyright",
+      "Copyright in original works lawfully owned by the developer remains with the respective rights holder, subject to applicable law and third-party licenses."
+    ],
+    [
+      "서비스 변경",
+      "운영자는 개선이나 보안상의 이유로 서비스를 변경할 수 있으며 중요한 변경 사항은 적절한 방법으로 안내합니다.",
+      "Service Changes",
+      "The operator may modify the service for improvements or security reasons and will provide appropriate notice of material changes."
+    ],
+    [
+      "문의",
+      EMAIL,
+      "Contact",
+      EMAIL
+    ]
+  ],
+
+  copyright: [
+    ["저작권 및 지식재산권 안내","Copyright and Intellectual Property Notice"],
+    [
+      "권리자",
+      "© 2026 Fantasy Meister. All Rights Reserved.",
+      "Rights Notice",
+      "© 2026 Fantasy Meister. All Rights Reserved."
+    ],
+    [
+      "보호 대상",
+      "개발자가 적법하게 권리를 보유한 독창적인 세계관의 구체적인 표현, 스토리, 캐릭터, 텍스트, 디자인 및 소스코드는 관련 법령에 따라 보호될 수 있습니다.",
+      "Protected Works",
+      "Original expressions of worldbuilding, stories, characters, text, designs, and source code lawfully owned by the developer may be protected under applicable copyright law."
+    ],
+    [
+      "무단 이용",
+      "관련 법령이나 적용 라이선스에서 허용하는 경우를 제외하고, 권리자의 허락 없는 보호 대상 창작물의 무단 복제, 재배포, 전송 및 상업적 이용을 금지합니다.",
+      "Unauthorized Use",
+      "Except where permitted by law or applicable licenses, unauthorized copying, redistribution, transmission, or commercial exploitation of protected works is prohibited."
+    ],
+    [
+      "권리의 한계",
+      "일반적인 게임 아이디어나 규칙, 제3자 저작물, 저작권 보호 요건을 충족하지 않는 AI 생성물까지 독점적으로 소유한다는 의미는 아닙니다.",
+      "Scope of Rights",
+      "This notice does not claim exclusive ownership of general game ideas or mechanics, third-party works, or AI-generated material that does not qualify for copyright protection."
+    ],
+    [
+      "상표",
+      "게임 명칭과 로고의 상표권은 별도의 출원 및 등록 여부에 따라 판단됩니다.",
+      "Trademarks",
+      "Trademark rights in the game's name and logo depend on applicable law and any separate trademark registration."
+    ],
+    [
+      "문의",
+      EMAIL,
+      "Contact",
+      EMAIL
+    ]
+  ],
+
+  notice: [
+    ["운영 안내","Service Information"],
+    [
+      "서비스 상태",
+      "현재 베타 테스트 중입니다.",
+      "Service Status",
+      "The game is currently in beta testing."
+    ],
+    [
+      "콘텐츠",
+      "전쟁, 질병, 재난 및 사망과 같은 사건이 포함됩니다.",
+      "Content Advisory",
+      "The game includes fictional events involving war, illness, disasters, and death."
+    ],
+    [
+      "저장",
+      "게임 기록은 브라우저에 저장됩니다. 첫 화면으로 돌아가기를 확인하면 현재 인생의 저장 기록이 삭제됩니다.",
+      "Saved Progress",
+      "Progress is stored in your browser. Confirming a return to the main menu deletes the current life."
+    ],
+    [
+      "문의",
+      EMAIL,
+      "Contact",
+      EMAIL
+    ]
+  ],
+
+  updates: [
+    ["업데이트 내역","Update History"],
+    [
+      "v1.1.0-beta",
+      "한국어·영어 전환 기능과 게임 내 문구, 사건, 연대기, 랭킹 및 정책 문서의 영어 표시를 추가했습니다.",
+      "v1.1.0-beta",
+      "Added Korean and English language switching for the interface, events, chronicle, leaderboards, and policy pages."
+    ],
+    [
+      "향후 개발",
+      "독립 NPC, 결혼, 자녀 성장, 국가 전쟁, 영지 운영, 다양한 사건 및 서버 검증형 랭킹을 개발할 예정입니다.",
+      "Planned Features",
+      "Future plans include independent NPCs, marriage, growing children, national wars, estate management, richer events, and server-verified leaderboards."
+    ]
+  ]
+};
+
+let lang = localStorage.getItem(LANG_KEY);
+
+if (lang !== "ko" && lang !== "en") {
+  lang = navigator.language.toLowerCase().startsWith("ko")
+    ? "ko"
+    : "en";
+}
 
 let p = null;
 let paused = true;
 let speed = 1;
 let auto = false;
-let homeNick = "";
 let currentRank = "prestige";
+let legalPage = null;
+let previousPage = "home";
+let rankCache = null;
 
-function weighted(items) {
-  let n = Math.random() *
-    items.reduce((sum, item) => sum + item[1], 0);
+function t(key, vars = {}) {
+  let value = TEXT[lang][key] || TEXT.ko[key] || key;
+
+  for (const [name, replacement] of Object.entries(vars)) {
+    value = value.split("{" + name + "}").join(String(replacement));
+  }
+
+  return value;
+}
+
+function pair(item) {
+  return item[lang === "ko" ? 0 : 1];
+}
+
+function weighted(items, weightIndex) {
+  let total = items.reduce((sum,x) => sum + x[weightIndex],0);
+  let n = Math.random() * total;
 
   for (const item of items) {
-    n -= item[1];
-
-    if (n <= 0) {
-      return item;
-    }
+    n -= item[weightIndex];
+    if (n <= 0) return item;
   }
 
   return items[items.length - 1];
 }
 
-function rollFate() {
-  let n = Math.random() * 100;
+function getRace(key) {
+  return RACES.find(x => x[0] === key || x[1] === key);
+}
 
-  for (const fate of FATES) {
-    n -= fate[1];
+function getClass(key) {
+  return CLASSES.find(x => x[0] === key || x[1] === key);
+}
 
-    if (n < 0) {
-      return fate[0];
-    }
+function getWorld(koName) {
+  return WORLD.find(x => x.ko === koName);
+}
+
+function displayRace(key) {
+  const item = getRace(key);
+  return item ? pair(item) : key;
+}
+
+function displayClass(key) {
+  const item = getClass(key);
+  return item ? pair(item) : key;
+}
+
+function displayContinent(key) {
+  const item = getWorld(key);
+  return item ? item[lang] : key;
+}
+
+function displayCountry(key) {
+  for (const world of WORLD) {
+    const item = world.countries.find(x => x[0] === key || x[1] === key);
+    if (item) return pair(item);
   }
-
-  return "평범한 운명";
+  return key;
 }
 
-function makeName(surname) {
-  return pick(FIRST_NAMES) + " " +
-    (surname || pick(SURNAMES));
+function makeName() {
+  const i = rnd(0,FIRST_NAMES.length-1);
+  const j = rnd(0,SURNAMES.length-1);
+
+  return {
+    ko:FIRST_NAMES[i] + " " + SURNAMES[j],
+    en:EN_NAMES[i] + " " + EN_SURNAMES[j]
+  };
 }
 
-function formatNumber(value) {
-  return Number(value || 0).toLocaleString("ko-KR");
+function nameOf(name) {
+  if (name && typeof name === "object") {
+    return name[lang] || name.ko;
+  }
+  return String(name || "");
+}
+
+function number(value) {
+  return Number(value || 0).toLocaleString(
+    lang === "ko" ? "ko-KR" : "en-US"
+  );
+}
+
+function dateText() {
+  const year = p.birthYear + p.age;
+  const month = p.month + 1;
+
+  return lang === "ko"
+    ? "제국력 " + year + "년 " + month + "월 1일"
+    : "Imperial Year " + year + ", " +
+      new Date(2000,month-1,1).toLocaleString("en-US",{month:"long"}) +
+      " 1";
+}
+
+function ageText(age) {
+  return lang === "ko" ? age + "세" : "Age " + age;
+}
+
+function setLanguage(next) {
+  if (next !== "ko" && next !== "en") return;
+
+  lang = next;
+  localStorage.setItem(LANG_KEY,lang);
+  document.documentElement.lang = lang;
+  document.title = t("title");
+
+  $("siteTitle").textContent = t("title");
+  $("siteSubtitle").textContent = t("subtitle");
+  $("footerTitle").textContent = t("title");
+
+  document.querySelectorAll("[data-t]").forEach(el => {
+    el.textContent = t(el.dataset.t);
+  });
+
+  $("nickname").placeholder = t("nicknamePlaceholder");
+  $("randomOption").textContent = t("randomEra");
+  $("customOption").textContent = t("customEra");
+
+  $("koBtn").className = lang === "ko" ? "selected" : "secondary";
+  $("enBtn").className = lang === "en" ? "selected" : "secondary";
+
+  buildRankButtons();
+
+  if (rankCache) drawRanks(rankCache);
+  if (p) render();
+  if (legalPage) renderLegal();
 }
 
 function toggleEra() {
@@ -951,553 +1118,376 @@ function toggleEra() {
   );
 }
 
-function getBirthYear() {
-  if ($("eraMode").value === "random") {
-    return rnd(500, 1500);
-  }
-
-  const year = Number($("eraYear").value);
-
-  if (
-    !Number.isInteger(year) ||
-    year < 500 ||
-    year > 1500
-  ) {
-    alert("출생 연도는 제국력 500~1500년 사이여야 합니다.");
-    return null;
-  }
-
-  return year;
-}
-
 function showPage(page) {
-  $("home").classList.toggle(
-    "hidden", page !== "home"
-  );
-
-  $("game").classList.toggle(
-    "hidden", page !== "game"
-  );
-
-  $("legal").classList.toggle(
-    "hidden", page !== "legal"
-  );
-
-  window.scrollTo(0, 0);
-}
-
-function dateText() {
-  if (!p) return "";
-
-  return "제국력 " +
-    (p.birthYear + p.age) +
-    "년 " +
-    (p.month + 1) +
-    "월 1일";
-}
-
-function log(text) {
-  if (!p) return;
-
-  p.history.unshift({
-    year: p.birthYear + p.age,
-    month: p.month,
-    age: p.age,
-    text: text
+  ["home","game","legal"].forEach(id => {
+    $(id).classList.toggle("hidden",id !== page);
   });
-
-  p.history = p.history.slice(0, 1000);
+  window.scrollTo(0,0);
 }
 
 function newLife() {
   const nickname = $("nickname").value.trim();
 
   if (!nickname) {
-    alert("플레이어 닉네임을 입력해 주세요.");
+    alert(t("enterNick"));
     return;
   }
 
-  const year = getBirthYear();
+  let birthYear;
 
-  if (year === null) return;
+  if ($("eraMode").value === "random") {
+    birthYear = rnd(500,1500);
+  } else {
+    birthYear = Number($("eraYear").value);
 
-  const continent = pick(WORLD);
-  const country = pick(continent.countries);
-  const race = weighted(RACES);
-  const social = weighted(CLASSES)[0];
+    if (!Number.isInteger(birthYear) ||
+        birthYear < 500 || birthYear > 1500) {
+      alert(t("invalidYear"));
+      return;
+    }
+  }
 
-  const surname = pick(SURNAMES);
-  const father = makeName(surname);
-  const mother = makeName();
+  const world = pick(WORLD);
+  const country = pick(world.countries);
+  const race = weighted(RACES,2);
+  const social = weighted(CLASSES,2);
 
   const wealth = {
-    "농노": 10,
-    "평민": 40,
-    "상인 가문": 150,
-    "하급 귀족": 300,
-    "상급 귀족": 1000,
-    "왕족": 5000
+    "농노":10,"평민":40,"상인 가문":150,
+    "하급 귀족":300,"상급 귀족":1000,"왕족":5000
   };
 
-  homeNick = nickname;
+  const fate = weighted(
+    [
+      ...FATES.map(x => [x[0],x[1],x[2]]),
+      ["평범한 운명","Ordinary Destiny",99.9]
+    ],
+    2
+  );
 
   p = {
-    id: crypto.randomUUID(),
+    id:crypto.randomUUID(),
+    nickname,
+    name:makeName(),
+    race:race[0],
+    social:social[0],
+    continent:world.ko,
+    country:country[0],
+    birthYear,
+    age:0,
+    month:0,
+    lifespan:rnd(race[3],race[4]),
+    fate:fate[0],
 
-    nickname: nickname,
-    name: makeName(surname),
+    father:makeName(),
+    mother:makeName(),
+    fatherJob:pick(JOBS),
+    motherJob:pick(JOBS),
+    fatherTrait:pick(TRAITS),
+    motherTrait:pick(TRAITS),
 
-    race: race[0],
-    social: social,
+    hp:100,maxHp:100,
+    mp:20,maxMp:20,
+    sp:100,maxSp:100,
 
-    continent: continent.name,
-    country: country,
+    sword:0,magic:0,intelligence:0,
+    strength:1,agility:1,
+    prestige:0,luck:rnd(1,100),
+    money:wealth[social[0]],
+    children:0,military:0,
+    territory:0,adventure:0,
 
-    birthYear: year,
-    age: 0,
-    month: 0,
-
-    lifespan: rnd(race[2], race[3]),
-    fate: rollFate(),
-
-    father: father,
-    mother: mother,
-
-    fatherJob: pick(JOBS),
-    motherJob: pick(JOBS),
-
-    fatherTrait: pick(TRAITS),
-    motherTrait: pick(TRAITS),
-
-    hp: 100,
-    maxHp: 100,
-
-    mp: 20,
-    maxMp: 20,
-
-    sp: 100,
-    maxSp: 100,
-
-    sword: 0,
-    magic: 0,
-    intelligence: 0,
-
-    prestige: 0,
-    luck: rnd(1, 100),
-
-    money: wealth[social],
-
-    strength: 1,
-    agility: 1,
-
-    children: 0,
-    military: 0,
-    territory: 0,
-    adventure: 0,
-
-    alive: true,
-
-    history: [],
-    pending: null
-  };
-
-  p.pending = {
-    birth: true,
-    title: "0세 — 탄생",
-
-    text:
-      "제국력 " + year +
-      "년 1월 1일.\\n\\n" +
-
-      "당신은 " + p.continent +
-      " 대륙의 " + p.country +
-      "에서 태어났습니다.\\n\\n" +
-
-      "아버지 " + father + "은(는) " +
-      p.fatherJob + " 일을 하는 " +
-      p.fatherTrait + " 사람입니다.\\n" +
-
-      "어머니 " + mother + "은(는) " +
-      p.motherJob + " 일을 하는 " +
-      p.motherTrait + " 사람입니다.\\n\\n" +
-
-      "당신의 가정은 " + social +
-      " 계층에 속합니다. " +
-
-      "부모님은 각자의 형편 속에서 " +
-      "새로운 생명을 맞이했습니다."
+    alive:true,
+    history:[],
+    pending:{kind:"birth"}
   };
 
   paused = true;
   auto = false;
   speed = 1;
 
-  log("이 세계에 태어났다.");
-
+  addLog("born");
   save();
   showPage("game");
   render();
 }
 
-function overallScore() {
-  if (!p) return 0;
+function birthStory() {
+  return t("birthStory",{
+    year:p.birthYear,
+    continent:displayContinent(p.continent),
+    country:displayCountry(p.country),
+    father:nameOf(p.father),
+    mother:nameOf(p.mother),
+    fatherJob:pair(p.fatherJob),
+    motherJob:pair(p.motherJob),
+    fatherTrait:pair(p.fatherTrait),
+    motherTrait:pair(p.motherTrait),
+    social:displayClass(p.social)
+  });
+}
 
-  const logValue = value =>
-    Math.log1p(Math.max(0, Number(value) || 0));
+function addLog(key,data={}) {
+  p.history.unshift({
+    year:p.birthYear+p.age,
+    month:p.month,
+    age:p.age,
+    key,
+    data
+  });
+
+  p.history = p.history.slice(0,1000);
+}
+
+function logText(item) {
+  if (item.text) return item.text;
+
+  const data = item.data || {};
+
+  if (item.key === "event") {
+    const event = EVENTS.find(x => x[0] === data.id);
+    return t("eventLog",{
+      title:event ? event[lang==="ko"?1:2] : data.id
+    });
+  }
+
+  if (item.key === "result") {
+    const event = EVENTS.find(x => x[0] === data.id);
+    const title = event ? event[lang==="ko"?1:2] : data.id;
+
+    return title + " — " +
+      (data.results || []).map(x => t(x)).join(" ");
+  }
+
+  return t(item.key,data);
+}
+
+function overallScore() {
+  const v = x => Math.log1p(Math.max(0,Number(x)||0));
 
   return Math.floor(
-    logValue(p.money) * 15 +
-    logValue(p.prestige) * 20 +
-    logValue(p.sword) * 20 +
-    logValue(p.magic) * 20 +
-    logValue(p.maxHp) * 10 +
-    logValue(p.intelligence) * 15 +
-    logValue(p.military) * 10 +
-    logValue(p.territory) * 15 +
-    logValue(p.adventure) * 15 +
-    logValue(p.children) * 10 +
-    logValue(p.luck) * 5
+    v(p.money)*15+
+    v(p.prestige)*20+
+    v(p.sword)*20+
+    v(p.magic)*20+
+    v(p.maxHp)*10+
+    v(p.intelligence)*15+
+    v(p.military)*10+
+    v(p.territory)*15+
+    v(p.adventure)*15+
+    v(p.children)*10+
+    v(p.luck)*5
   );
 }
 
-function makeEvent() {
-  const base = pick(EVENTS);
+function createEvent() {
+  const event = pick(EVENTS);
 
   p.pending = {
-    birth: false,
-    title: base.title,
-
-    text:
-      pick(PLACES) + " " +
-      base.text + "\\n\\n" +
-      "당신은 어떻게 행동하시겠습니까?",
-
-    kind: base.kind,
-    ability: base.ability
+    kind:"event",
+    id:event[0],
+    place:PLACES.indexOf(pick(PLACES))
   };
 
   paused = true;
-
-  log(base.title + " 사건이 발생했다.");
+  addLog("event",{id:event[0]});
 }
 
-function gainAbility(ability, amount) {
-  if (!p) return;
-
-  if (ability === "health") {
+function gainAbility(key,amount) {
+  if (key === "health") {
     p.maxHp += amount;
     p.hp += amount;
-    return;
-  }
-
-  if (ability === "magic") {
+  } else if (key === "magic") {
     p.magic += amount;
     p.maxMp += amount;
     p.mp += amount;
-    return;
+  } else {
+    p[key] = Math.max(0,Number(p[key]||0)+amount);
   }
-
-  p[ability] = Math.max(
-    0,
-    Number(p[ability] || 0) + amount
-  );
 }
 
 function resolveEvent(choice) {
   if (!p || !p.pending) return;
 
-  if (p.pending.birth) {
+  if (p.pending.kind === "birth") {
     p.pending = null;
     paused = false;
-
-    log("가족과 함께 인생을 시작했다.");
-
+    addLog("startLog");
     save();
     render();
     return;
   }
 
-  const event = p.pending;
+  const event = EVENTS.find(x => x[0] === p.pending.id);
+  if (!event) return;
 
-  const abilityValue =
-    event.ability === "health"
-      ? p.maxHp
-      : Number(p[event.ability] || 0);
+  const ability = event[5];
+  const value = ability === "health" ? p.maxHp : Number(p[ability]||0);
 
+  const results = [];
   let success = false;
-  let result = "";
 
   if (choice === 0) {
-    const chance = Math.min(
-      95,
-      40 + Math.sqrt(abilityValue) * 3
-    );
-
-    success = Math.random() * 100 < chance;
+    success = Math.random()*100 <
+      Math.min(95,40+Math.sqrt(value)*3);
 
     if (success) {
-      gainAbility(event.ability, rnd(1, 5));
-
-      p.prestige += rnd(1, 8);
-      p.money += rnd(10, 80);
+      gainAbility(ability,rnd(1,5));
+      p.prestige += rnd(1,8);
+      p.money += rnd(10,80);
       p.adventure++;
-
-      result =
-        "위험을 감수한 끝에 성공했다. " +
-        "보상과 경험을 얻었다.";
+      results.push("success");
     } else {
-      p.hp -= rnd(5, 20);
-
-      p.money = Math.max(
-        0,
-        p.money - rnd(1, 20)
-      );
-
-      result =
-        "용감하게 도전했지만 실패했다. " +
-        "부상과 손실을 입었다.";
+      p.hp -= rnd(5,20);
+      p.money = Math.max(0,p.money-rnd(1,20));
+      results.push("failure");
     }
   }
 
   if (choice === 1) {
-    const chance = Math.min(
-      95,
-      55 + Math.sqrt(p.intelligence) * 3
-    );
+    success = Math.random()*100 <
+      Math.min(95,55+Math.sqrt(p.intelligence)*3);
 
-    success = Math.random() * 100 < chance;
-
-    p.intelligence += rnd(1, 3);
+    p.intelligence += rnd(1,3);
 
     if (success) {
-      p.money += rnd(5, 45);
-      p.prestige += rnd(1, 4);
-
-      result =
-        "신중하게 판단해 좋은 결과를 얻었다.";
+      p.money += rnd(5,45);
+      p.prestige += rnd(1,4);
+      results.push("carefulSuccess");
     } else {
-      result =
-        "신중하게 접근했지만 원하는 결과를 얻지 못했다.";
+      results.push("carefulFailure");
     }
   }
 
   if (choice === 2) {
-    result =
-      "사건에 깊이 관여하지 않고 지나갔다.";
+    results.push("walkAway");
 
-    if (
-      event.kind === "bad" &&
-      Math.random() < 0.2
-    ) {
-      p.hp -= rnd(1, 8);
-
-      result +=
-        " 하지만 피해를 완전히 피하지는 못했다.";
+    if (event[6] === "bad" && Math.random()<0.2) {
+      p.hp -= rnd(1,8);
+      results.push("minorDamage");
     }
   }
 
-  if (
-    event.kind === "bad" &&
-    success
-  ) {
-    result =
-      "불행한 상황을 기회로 바꾸었다. " +
-      result;
+  if (success && Math.random()<0.002) {
+    gainAbility(ability,rnd(500,3000));
+    p.prestige += rnd(100,500);
+    results.push("breakthrough");
   }
 
-  if (
-    event.kind === "good" &&
-    !success &&
-    choice !== 2
-  ) {
-    result =
-      "좋은 기회였지만 뜻대로 풀리지 않았다. " +
-      result;
+  if (success && p.fate !== "평범한 운명" &&
+      Math.random()<0.025) {
+    results.push("omen");
   }
 
-  // 매우 드문 기연
-  if (success && Math.random() < 0.002) {
-    const bonus = rnd(500, 3000);
-
-    gainAbility(event.ability, bonus);
-
-    p.prestige += rnd(100, 500);
-
-    result +=
-      " 전설적인 기연을 얻어 " +
-      "능력이 폭발적으로 성장했다.";
+  if (success && p.social==="농노" &&
+      p.prestige>=100 && Math.random()<0.04) {
+    p.social="평민";
+    results.push("freedom");
   }
 
-  // 숨겨진 운명의 징조
-  if (
-    success &&
-    p.fate !== "평범한 운명" &&
-    Math.random() < 0.025
-  ) {
-    result +=
-      " 자신의 운명에 관한 " +
-      "기묘한 징조를 느꼈다.";
+  if (success && p.social==="평민" &&
+      p.prestige>=500 && Math.random()<0.005) {
+    p.social="하급 귀족";
+    results.push("nobility");
   }
 
-  // 농노 신분 탈출
-  if (
-    success &&
-    p.social === "농노" &&
-    p.prestige >= 100 &&
-    Math.random() < 0.04
-  ) {
-    p.social = "평민";
-
-    result +=
-      " 공적을 인정받아 농노 신분에서 벗어났다.";
+  if (success && p.age>=18 &&
+      p.prestige>=100 && Math.random()<0.003) {
+    p.territory+=rnd(1,5);
+    p.military+=rnd(10,100);
+    results.push("landGrant");
   }
 
-  // 신분 상승
-  if (
-    success &&
-    p.social === "평민" &&
-    p.prestige >= 500 &&
-    Math.random() < 0.005
-  ) {
-    p.social = "하급 귀족";
+  addLog("result",{id:event[0],results});
 
-    result +=
-      " 특별한 공적을 인정받아 작위를 받았다.";
-  }
+  p.pending=null;
+  paused=false;
 
-  // 희귀한 영지 획득
-  if (
-    success &&
-    p.age >= 18 &&
-    p.prestige >= 100 &&
-    Math.random() < 0.003
-  ) {
-    p.territory += rnd(1, 5);
-    p.military += rnd(10, 100);
-
-    result +=
-      " 영지와 병력을 하사받았다.";
-  }
-
-  log(event.title + " — " + result);
-
-  p.pending = null;
-  paused = false;
-
-  if (p.hp <= 0) {
-    die("사건 중 입은 부상");
-  }
+  if (p.hp<=0) die("deathInjury");
 
   save();
   render();
 }
 
 function yearlyLife() {
-  if (!p || !p.alive) return;
+  if (!p.alive) return;
 
-  const age = p.age;
+  const age=p.age;
 
-  // 성장 한도 없음
-  if (age >= 3) {
-    if (Math.random() < 0.65) {
-      const gain = rnd(1, 4);
-
-      p.maxHp += gain;
-      p.hp += gain;
+  if (age>=3) {
+    if (Math.random()<0.65) {
+      const gain=rnd(1,4);
+      p.maxHp+=gain;
+      p.hp+=gain;
     }
 
-    if (Math.random() < 0.5) {
-      const gain = rnd(1, 3);
-
-      p.maxMp += gain;
-      p.mp += gain;
+    if (Math.random()<0.5) {
+      const gain=rnd(1,3);
+      p.maxMp+=gain;
+      p.mp+=gain;
     }
 
-    if (Math.random() < 0.6) {
-      const gain = rnd(1, 3);
-
-      p.maxSp += gain;
-      p.sp += gain;
+    if (Math.random()<0.6) {
+      const gain=rnd(1,3);
+      p.maxSp+=gain;
+      p.sp+=gain;
     }
 
-    if (Math.random() < 0.5) {
-      p.intelligence++;
-    }
-
-    if (Math.random() < 0.4) {
-      p.sword++;
-    }
-
-    if (Math.random() < 0.3) {
-      p.magic++;
-    }
-
-    if (Math.random() < 0.4) {
-      p.strength++;
-    }
-
-    if (Math.random() < 0.4) {
-      p.agility++;
-    }
+    if (Math.random()<0.5) p.intelligence++;
+    if (Math.random()<0.4) p.sword++;
+    if (Math.random()<0.3) p.magic++;
+    if (Math.random()<0.4) p.strength++;
+    if (Math.random()<0.4) p.agility++;
   }
 
-  // 경제 활동
-  if (age >= 16 && age <= 75) {
-    const income = {
-      "농노": [1, 10],
-      "평민": [5, 20],
-      "상인 가문": [10, 50],
-      "하급 귀족": [15, 60],
-      "상급 귀족": [30, 100],
-      "왕족": [50, 150]
+  if (age>=16 && age<=75) {
+    const incomes={
+      "농노":[1,10],"평민":[5,20],
+      "상인 가문":[10,50],
+      "하급 귀족":[15,60],
+      "상급 귀족":[30,100],
+      "왕족":[50,150]
     };
 
-    const range = income[p.social] || [1, 10];
-
-    p.money += rnd(range[0], range[1]);
+    const range=incomes[p.social]||[1,10];
+    p.money+=rnd(range[0],range[1]);
   }
 
-  // 가족 이벤트
-  if (age >= 18 && age <= 65) {
-    if (Math.random() < 0.035) {
-      p.children++;
-
-      log("가족에게 새로운 자녀가 태어났다.");
-    }
+  if (age>=18 && age<=65 && Math.random()<0.035) {
+    p.children++;
+    addLog("childLog");
   }
 
-  // 모험
-  if (age >= 12 && Math.random() < 0.15) {
-    p.adventure += rnd(1, 3);
+  if (age>=12 && Math.random()<0.15) {
+    p.adventure+=rnd(1,3);
   }
 
-  // 영지 운영
-  if (p.territory > 0 && age >= 18) {
-    p.military += rnd(0, 5);
+  if (p.territory>0 && age>=18) {
+    p.military+=rnd(0,5);
   }
 
-  // 운의 변화
-  if (Math.random() < 0.3) {
-    p.luck = Math.max(
-      0,
-      p.luck + rnd(-3, 4)
-    );
+  if (Math.random()<0.3) {
+    p.luck=Math.max(0,p.luck+rnd(-3,4));
   }
 
-  // 노화에 따른 위험
-  if (age > p.lifespan * 0.75) {
-    if (Math.random() < 0.25) {
-      p.hp -= rnd(1, 5);
-    }
+  if (age>p.lifespan*0.75 && Math.random()<0.25) {
+    p.hp-=rnd(1,5);
   }
 
-  if (age >= p.lifespan) {
-    die("노화");
-  }
+  if (age>=p.lifespan) die("deathOld");
+  else if (p.hp<=0) die("deathHealth");
+}
 
-  if (p.hp <= 0 && p.alive) {
-    die("건강 악화");
-  }
+function die(reason) {
+  if (!p.alive) return;
+
+  p.alive=false;
+  paused=true;
+  p.pending=null;
+  addLog("died",{reason:t(reason)});
+
+  // Store a language-independent reason for new saves.
+  p.history[0].data={reasonKey:reason};
 }
 
 function advance() {
@@ -1505,28 +1495,18 @@ function advance() {
 
   p.month++;
 
-  if (p.month >= 12) {
-    p.month = 0;
+  if (p.month>=12) {
+    p.month=0;
     p.age++;
-
-    log(p.age + "세가 되었다.");
-
+    addLog("yearReached",{age:p.age});
     yearlyLife();
   }
 
-  if (
-    p.alive &&
-    p.age >= 1 &&
-    Math.random() < 0.10
-  ) {
-    makeEvent();
+  if (p.alive && p.age>=1 && Math.random()<0.10) {
+    createEvent();
 
-    if (
-      auto &&
-      p.pending &&
-      !p.pending.birth
-    ) {
-      resolveEvent(rnd(0, 2));
+    if (auto && p.pending) {
+      resolveEvent(rnd(0,2));
     }
   }
 
@@ -1534,208 +1514,159 @@ function advance() {
   render();
 }
 
-function die(reason) {
-  if (!p || !p.alive) return;
-
-  p.alive = false;
-  paused = true;
-  p.pending = null;
-
-  log(reason + "으로 생을 마감했다.");
-}
-
 function togglePause() {
-  if (!p || p.pending || !p.alive) return;
-
-  paused = !paused;
+  if (!p || !p.alive || p.pending) return;
+  paused=!paused;
   render();
 }
 
 function changeSpeed() {
-  speed = speed === 1
-    ? 2
-    : speed === 2
-      ? 4
-      : 1;
-
+  speed=speed===1?2:speed===2?4:1;
   render();
 }
 
 function toggleAuto() {
-  auto = !auto;
+  auto=!auto;
 
-  if (
-    auto &&
-    p &&
-    p.pending &&
-    !p.pending.birth
-  ) {
-    resolveEvent(rnd(0, 2));
+  if (auto && p && p.pending &&
+      p.pending.kind==="event") {
+    resolveEvent(rnd(0,2));
   }
 
   render();
 }
 
 function goHome() {
-  const confirmed = confirm(
-    "정말로 처음으로 돌아가시겠습니까?\\n\\n" +
-    "현재 진행 중인 인생의 저장 기록이 삭제됩니다.\\n" +
-    "처음으로 돌아가면 이어서 플레이할 수 없습니다.\\n\\n" +
-    "이미 등록한 세계 랭킹 기록은 삭제되지 않습니다."
-  );
-
-  if (!confirmed) return;
+  if (!confirm(t("homeConfirm"))) return;
 
   localStorage.removeItem(SAVE_KEY);
-
-  p = null;
-  paused = true;
-  auto = false;
+  p=null;
+  paused=true;
+  auto=false;
 
   showPage("home");
-
-  $("nickname").value = homeNick;
-
-  loadRanks("prestige");
+  loadRanks(currentRank);
 }
 
-function addStat(label, value) {
-  const div = document.createElement("div");
-  div.className = "stat";
+function addStat(label,value) {
+  const div=document.createElement("div");
+  div.className="stat";
 
-  const small = document.createElement("small");
-  small.textContent = label;
+  const small=document.createElement("small");
+  small.textContent=label;
 
-  const strong = document.createElement("strong");
-  strong.textContent = value;
+  const strong=document.createElement("strong");
+  strong.textContent=value;
 
-  div.appendChild(small);
-  div.appendChild(strong);
-
+  div.append(small,strong);
   $("stats").appendChild(div);
 }
 
 function render() {
   if (!p) return;
 
-  $("charTitle").textContent =
-    p.name + " · " + p.age + "세";
+  $("charTitle").textContent=
+    nameOf(p.name)+" · "+ageText(p.age);
 
-  $("gameDate").textContent = dateText();
+  $("gameDate").textContent=dateText();
 
-  $("charInfo").textContent =
-    p.continent + " / " +
-    p.country + " / " +
-    p.race + " / " +
-    p.social;
+  $("charInfo").textContent=[
+    displayContinent(p.continent),
+    displayCountry(p.country),
+    displayRace(p.race),
+    displayClass(p.social)
+  ].join(" / ");
 
-  $("familyInfo").textContent =
-    "아버지: " + p.father +
-    " · 어머니: " + p.mother;
+  $("familyInfo").textContent=
+    t("father")+": "+nameOf(p.father)+" · "+
+    t("mother")+": "+nameOf(p.mother);
 
   $("stats").replaceChildren();
 
-  addStat(
-    "체력",
-    formatNumber(Math.max(0, p.hp)) +
-    " / " +
-    formatNumber(p.maxHp)
-  );
+  addStat(t("hp"),number(Math.max(0,p.hp))+" / "+number(p.maxHp));
+  addStat(t("mp"),number(p.mp)+" / "+number(p.maxMp));
+  addStat(t("sp"),number(p.sp)+" / "+number(p.maxSp));
 
-  addStat(
-    "마력",
-    formatNumber(p.mp) +
-    " / " +
-    formatNumber(p.maxMp)
-  );
+  [
+    ["sword",p.sword],["magic",p.magic],
+    ["intelligence",p.intelligence],
+    ["strength",p.strength],["agility",p.agility],
+    ["prestige",p.prestige],["money",p.money],
+    ["luck",p.luck],["children",p.children],
+    ["military",p.military],["territory",p.territory],
+    ["adventure",p.adventure],["overall",overallScore()]
+  ].forEach(x=>addStat(t(x[0]),number(x[1])));
 
-  addStat(
-    "기력",
-    formatNumber(p.sp) +
-    " / " +
-    formatNumber(p.maxSp)
-  );
+  $("lifeStatus").textContent=
+    !p.alive?t("dead"):
+    p.pending?t("waiting"):
+    paused?t("paused"):
+    t("running")+" · "+speed+"x";
 
-  const stats = [
-    ["검술", p.sword],
-    ["마법", p.magic],
-    ["지능", p.intelligence],
-    ["근력", p.strength],
-    ["민첩", p.agility],
-    ["명성", p.prestige],
-    ["재산", p.money],
-    ["운", p.luck],
-    ["자녀 수", p.children],
-    ["군사력", p.military],
-    ["영토", p.territory],
-    ["모험", p.adventure],
-    ["종합 점수", overallScore()]
-  ];
+  $("speedButton").textContent=t("speed")+" "+speed+"x";
+  $("autoButton").textContent=
+    t("auto")+" · "+t(auto?"on":"off");
 
-  stats.forEach(item => {
-    addStat(
-      item[0],
-      formatNumber(item[1])
-    );
-  });
-
-  $("lifeStatus").textContent =
-    !p.alive
-      ? "인생 종료 · 사망"
-      : p.pending
-        ? "선택을 기다리는 중"
-        : paused
-          ? "일시정지"
-          : "시간 진행 중 · " +
-            speed + "배속" +
-            (auto ? " · 자동 결정 켜짐" : "");
-
-  $("eventCard").classList.toggle(
-    "hidden",
-    !p.pending
-  );
+  $("eventCard").classList.toggle("hidden",!p.pending);
 
   if (p.pending) {
-    $("eventTitle").textContent =
-      p.pending.title;
+    if (p.pending.kind==="birth") {
+      $("eventTitle").textContent=t("birthEvent");
+      $("eventText").textContent=birthStory();
+    } else {
+      const event=EVENTS.find(x=>x[0]===p.pending.id);
 
-    $("eventText").textContent =
-      p.pending.text;
+      if (event) {
+        const index=lang==="ko"?1:2;
+        const description=event[lang==="ko"?3:4];
+        const place=PLACES[p.pending.place]||PLACES[0];
+
+        $("eventTitle").textContent=event[index];
+        $("eventText").textContent=t("eventText",{
+          place:pair(place),
+          description,
+          prompt:t("eventPrompt")
+        });
+      }
+    }
 
     $("choices").replaceChildren();
 
-    const choices = p.pending.birth
-      ? ["이 가정에서 살아간다"]
-      : [
-          "적극적으로 해결한다",
-          "신중하게 조사한다",
-          "관여하지 않는다"
-        ];
+    const options=p.pending.kind==="birth"
+      ?["birthChoice"]
+      :["act","investigate","avoid"];
 
-    choices.forEach((label, index) => {
-      const button = document.createElement("button");
-
-      button.className = "choice";
-      button.textContent = label;
-
-      button.onclick = () => resolveEvent(index);
-
+    options.forEach((key,index)=>{
+      const button=document.createElement("button");
+      button.className="choice";
+      button.textContent=t(key);
+      button.onclick=()=>resolveEvent(index);
       $("choices").appendChild(button);
     });
   }
 
   $("history").replaceChildren();
 
-  p.history.slice(0, 120).forEach(item => {
-    const div = document.createElement("div");
+  p.history.slice(0,120).forEach(item=>{
+    const div=document.createElement("div");
+    div.className="log";
 
-    div.className = "log";
+    let description;
 
-    div.textContent =
-      "제국력 " + item.year +
-      "년 " + (item.month + 1) +
-      "월 · " + item.age +
-      "세 — " + item.text;
+    if (item.key==="died" && item.data?.reasonKey) {
+      description=t("died",{
+        reason:t(item.data.reasonKey)
+      });
+    } else {
+      description=logText(item);
+    }
+
+    const when=lang==="ko"
+      ?"제국력 "+item.year+"년 "+(item.month+1)+"월"
+      :"Imperial Year "+item.year+", Month "+(item.month+1);
+
+    div.textContent=
+      when+" · "+ageText(item.age)+" — "+description;
 
     $("history").appendChild(div);
   });
@@ -1745,622 +1676,366 @@ function save() {
   if (!p) return;
 
   try {
-    localStorage.setItem(
-      SAVE_KEY,
-      JSON.stringify(p)
-    );
-  } catch (error) {
-    console.error("저장 실패:", error);
+    localStorage.setItem(SAVE_KEY,JSON.stringify(p));
+  } catch(error) {
+    console.error("Save failed:",error);
   }
 }
 
 function buildRankButtons() {
   $("rankButtons").replaceChildren();
 
-  Object.entries(RANKS).forEach(([key, label]) => {
-    const button = document.createElement("button");
-
-    button.className = "secondary";
-    button.textContent = label;
-
-    button.onclick = () => loadRanks(key);
-
+  RANKS.forEach(([key,ko,en])=>{
+    const button=document.createElement("button");
+    button.className=
+      key===currentRank?"selected":"secondary";
+    button.textContent=lang==="ko"?ko:en;
+    button.onclick=()=>loadRanks(key);
     $("rankButtons").appendChild(button);
   });
 }
 
 async function loadRanks(type) {
-  currentRank = type;
+  currentRank=type;
+  rankCache=null;
+  buildRankButtons();
 
-  const buttons = $("rankButtons").children;
-
-  Object.keys(RANKS).forEach((key, index) => {
-    if (buttons[index]) {
-      buttons[index].classList.toggle(
-        "active",
-        key === type
-      );
-    }
-  });
-
-  $("rankNotice").textContent =
-    "랭킹 불러오는 중...";
+  $("rankNotice").textContent=t("loading");
+  $("ranking").replaceChildren();
 
   try {
-    const response = await fetch(
-      "/api/rankings?type=" +
-      encodeURIComponent(type)
+    const response=await fetch(
+      "/api/rankings?type="+encodeURIComponent(type)
     );
 
-    const data = await response.json();
+    const data=await response.json();
 
-    if (currentRank !== type) return;
+    if (currentRank!==type) return;
 
-    $("ranking").replaceChildren();
+    rankCache=data;
+    drawRanks(data);
+  } catch(error) {
+    $("rankNotice").textContent=t("rankError");
+  }
+}
 
-    if (!data.enabled) {
-      $("rankNotice").textContent =
-        "공용 랭킹 데이터베이스가 연결되지 않았습니다.";
-      return;
-    }
+function drawRanks(data) {
+  $("ranking").replaceChildren();
 
-    $("rankNotice").textContent =
-      RANKS[type] + " 세계 랭킹";
+  if (!data.enabled) {
+    $("rankNotice").textContent=t("unavailable");
+    return;
+  }
 
-    const table = document.createElement("table");
-    const header = document.createElement("tr");
+  if (!data.rows.length) {
+    $("rankNotice").textContent=t("empty");
+    return;
+  }
 
-    ["순위", "플레이어", "캐릭터", "점수"]
-      .forEach(label => {
-        const th = document.createElement("th");
-        th.textContent = label;
-        header.appendChild(th);
-      });
+  const rank=RANKS.find(x=>x[0]===currentRank);
+  $("rankNotice").textContent=
+    (rank ? rank[lang==="ko"?1:2] : currentRank)+
+    " · "+t("leaderboard");
 
-    table.appendChild(header);
+  const table=document.createElement("table");
+  const head=document.createElement("tr");
 
-    data.rows.forEach((record, index) => {
-      const tr = document.createElement("tr");
+  ["rankPosition","player","character","score"].forEach(key=>{
+    const th=document.createElement("th");
+    th.textContent=t(key);
+    head.appendChild(th);
+  });
 
-      const values = [
-        index + 1,
-        record.nickname,
-        record.character_name,
-        formatNumber(record[type])
-      ];
+  table.appendChild(head);
 
-      values.forEach(value => {
-        const td = document.createElement("td");
-        td.textContent = value;
-        tr.appendChild(td);
-      });
+  data.rows.forEach((record,index)=>{
+    const tr=document.createElement("tr");
 
-      table.appendChild(tr);
+    [
+      index+1,
+      record.nickname,
+      record.character_name,
+      number(record[currentRank])
+    ].forEach(value=>{
+      const td=document.createElement("td");
+      td.textContent=value;
+      tr.appendChild(td);
     });
 
-    $("ranking").appendChild(table);
+    table.appendChild(tr);
+  });
 
-    if (!data.rows.length) {
-      $("rankNotice").textContent =
-        "아직 등록된 기록이 없습니다.";
-    }
-  } catch (error) {
-    $("rankNotice").textContent =
-      "랭킹을 불러오지 못했습니다.";
-  }
+  $("ranking").appendChild(table);
 }
 
 async function publishRank() {
-  if (!p) return;
+  if (!p || !confirm(t("rankConfirm"))) return;
 
-  const confirmed = confirm(
-    "세계 랭킹에 기록을 등록하시겠습니까?\\n\\n" +
-    "닉네임, 캐릭터 이름, 종족, 나이와 " +
-    "게임 점수가 다른 이용자에게 공개됩니다."
-  );
-
-  if (!confirmed) return;
-
-  const data = {
-    id: p.id,
-    nickname: p.nickname,
-    character_name: p.name,
-    race: p.race,
-    age: p.age,
-
-    prestige: p.prestige,
-    money: p.money,
-    sword: p.sword,
-    magic: p.magic,
-    health: p.maxHp,
-    luck: p.luck,
-    children: p.children,
-    military: p.military,
-    territory: p.territory,
-    intelligence: p.intelligence,
-    adventure: p.adventure,
-    longevity: p.age,
-    overall: overallScore()
+  const payload={
+    id:p.id,
+    nickname:p.nickname,
+    character_name:nameOf(p.name),
+    race:displayRace(p.race),
+    age:p.age,
+    prestige:p.prestige,
+    money:p.money,
+    sword:p.sword,
+    magic:p.magic,
+    health:p.maxHp,
+    luck:p.luck,
+    children:p.children,
+    military:p.military,
+    territory:p.territory,
+    intelligence:p.intelligence,
+    adventure:p.adventure,
+    longevity:p.age,
+    overall:overallScore()
   };
 
   try {
-    const response = await fetch("/api/rankings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(data)
+    const response=await fetch("/api/rankings",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    const result=await response.json();
 
     alert(
-      result.message ||
-      "랭킹 등록 요청이 처리되었습니다."
+      response.ok
+        ?t("rankSuccess")
+        :(result.message||t("rankFail"))
     );
-  } catch (error) {
-    alert("랭킹 서버에 연결하지 못했습니다.");
+  } catch(error) {
+    alert(t("rankFail"));
   }
 }
 
-const LEGAL = {
-  privacy: {
-    title: "개인정보 처리방침 — 베타 초안",
-    sections: [
-      [
-        "1. 개인정보 처리 목적",
-        "게임 진행, 선택적 세계 랭킹 운영, 이용자 문의 대응 및 서비스 안정성 확보를 위해 필요한 정보를 처리합니다."
-      ],
-      [
-        "2. 처리하는 정보",
-        "게임 진행 정보는 이용자의 브라우저에 저장됩니다. 랭킹 등록 시 닉네임, 캐릭터 이름, 종족, 나이, 능력치, 점수 및 기록 식별자가 서버에 저장됩니다. 호스팅 과정에서 IP 주소와 접속 기록 등이 처리될 수 있습니다."
-      ],
-      [
-        "3. 랭킹 공개",
-        "랭킹 등록은 선택 사항입니다. 공개 랭킹에는 플레이어 닉네임, 캐릭터 이름 및 게임 점수가 표시됩니다."
-      ],
-      [
-        "4. 보유 기간",
-        "브라우저의 게임 기록은 이용자가 삭제할 수 있습니다. 서버 랭킹 기록의 보유 기간과 자동 삭제 기준은 정식 운영 전에 확정하여 고지해야 합니다."
-      ],
-      [
-        "5. 개인정보 삭제 및 권리 행사",
-        "이용자는 관계 법령에 따라 개인정보 열람, 정정, 삭제 및 처리정지 등을 요청할 수 있습니다. 현재 서버 랭킹 삭제는 이메일을 통해 요청할 수 있으며 기록 소유권 확인이 필요할 수 있습니다."
-      ],
-      [
-        "6. 외부 서비스 및 국외 이전",
-        "웹서비스 운영에 Render 호스팅과 PostgreSQL 데이터베이스를 사용합니다. 실제 처리 위탁, 국외 이전 국가, 이전 항목, 보관 기간 및 법적 근거는 운영 환경을 확인하여 별도로 고지해야 합니다."
-      ],
-      [
-        "7. 안전성 확보",
-        "HTTPS 통신 및 데이터베이스 접속정보 보호를 사용합니다. 추가적인 인증, 점수 검증 및 접근 통제는 보완 중입니다."
-      ],
-      [
-        "8. 문의",
-        "개인정보 관련 문의 및 삭제 요청: fantasymaister@gmail.com"
-      ],
-      [
-        "9. 시행 안내",
-        "본 문서는 베타 초안입니다. 정식 시행일, 운영자 정보, 보유 기간 및 실제 개인정보 처리 현황을 확인한 뒤 최종 확정해야 합니다."
-      ]
-    ]
-  },
-
-  terms: {
-    title: "서비스 이용약관 — 베타 초안",
-    sections: [
-      [
-        "제1조 목적",
-        "본 약관은 판타지에서 살아가기 서비스의 이용 조건과 운영자 및 이용자의 권리와 의무를 정하기 위한 것입니다."
-      ],
-      [
-        "제2조 서비스 내용",
-        "본 서비스는 가상의 판타지 세계에서 출생부터 사망까지 한 인물의 인생을 체험하는 시뮬레이션 게임입니다."
-      ],
-      [
-        "제3조 이용 조건",
-        "현재 서비스는 무료 베타 버전이며 회원가입 없이 이용할 수 있습니다. 브라우저 저장 기록은 기기 또는 브라우저 환경에 따라 유실될 수 있습니다."
-      ],
-      [
-        "제4조 세계 랭킹",
-        "이용자는 자신의 게임 기록을 선택적으로 공개 랭킹에 등록할 수 있습니다. 타인 사칭, 부정한 점수 조작, 서버 공격 및 서비스 운영을 방해하는 행위는 금지됩니다."
-      ],
-      [
-        "제5조 서비스 변경",
-        "운영자는 서비스 개선이나 보안상의 이유로 기능을 변경할 수 있습니다. 중요한 변경은 적절한 방법으로 안내합니다."
-      ],
-      [
-        "제6조 저작권 및 지식재산권",
-        "판타지에서 살아가기의 독창적인 세계관, 스토리, 캐릭터, 문구, 디자인, 소스코드 등 개발자가 적법하게 권리를 보유한 창작물에 관한 저작권 및 지식재산권은 해당 권리자에게 귀속됩니다. 관련 법령 또는 적용 라이선스에서 허용하는 경우를 제외하고, 권리자의 사전 허락 없는 무단 복제, 배포, 전송 및 상업적 이용을 금지합니다. 일반적인 게임 아이디어와 규칙, 제3자의 저작물 및 저작권 보호 요건을 충족하지 않는 부분은 이 조항만으로 독점적인 권리가 발생하지 않습니다."
-      ],
-      [
-        "제7조 유료 서비스",
-        "현재는 무료 베타 서비스입니다. 향후 유료 기능을 도입할 경우 가격, 결제 및 환불 조건을 별도로 안내합니다."
-      ],
-      [
-        "제8조 책임과 분쟁",
-        "서비스 이용과 관련된 책임 및 분쟁은 대한민국의 관련 법령에 따릅니다. 본 약관은 법령상 보장되는 이용자의 권리를 제한하지 않습니다."
-      ],
-      [
-        "제9조 문의",
-        "서비스 및 권리 관련 문의: fantasymaister@gmail.com"
-      ]
-    ]
-  },
-
-  copyright: {
-    title: "저작권 및 지식재산권 안내",
-    sections: [
-      [
-        "권리자 표시",
-        "© 2026 Fantasy Meister. All Rights Reserved."
-      ],
-      [
-        "보호 대상",
-        "본 게임에서 개발자가 적법하게 권리를 보유한 독창적인 세계관의 구체적인 표현, 스토리, 캐릭터 설정, 텍스트, 디자인 및 소스코드 등은 관련 저작권법에 따라 보호될 수 있습니다."
-      ],
-      [
-        "무단 이용 안내",
-        "관련 법령과 적용 라이선스에서 허용하는 경우를 제외하고, 권리자의 허락 없이 보호되는 창작물을 무단 복제, 재배포, 전송 또는 상업적으로 이용하는 행위를 금지합니다."
-      ],
-      [
-        "권리 범위",
-        "본 고지는 일반적인 판타지 설정, 게임 장르, 아이디어, 규칙 자체에 대한 독점권을 주장하지 않습니다. 제3자 저작물과 오픈소스 라이선스의 권리는 존중합니다. AI 생성물에 대한 권리 귀속은 실제 인간의 창작적 기여와 관련 법령에 따라 판단됩니다."
-      ],
-      [
-        "게임 명칭",
-        "판타지에서 살아가기 및 Fantasy Meister의 명칭 사용과 관련된 상표권은 별도의 출원 및 등록 여부에 따라 판단됩니다. 본 저작권 고지만으로 상표권이 등록되는 것은 아닙니다."
-      ],
-      [
-        "권리 침해 신고",
-        "저작권 관련 문의, 이용 허락 요청 및 권리 침해 신고: fantasymaister@gmail.com"
-      ]
-    ]
-  },
-
-  notice: {
-    title: "운영 안내",
-    sections: [
-      [
-        "서비스 상태",
-        "판타지에서 살아가기는 현재 베타 테스트 중입니다."
-      ],
-      [
-        "콘텐츠 안내",
-        "게임에는 전쟁, 질병, 범죄, 재난, 사망 등 무거운 사건이 포함될 수 있습니다. 국가와 인물 및 사건은 가상의 세계관을 바탕으로 합니다."
-      ],
-      [
-        "저장 안내",
-        "게임 진행 정보는 브라우저에 저장됩니다. 첫 화면 복귀를 확인하면 현재 인생의 로컬 저장 기록이 삭제됩니다."
-      ],
-      [
-        "개선 의견",
-        "게임 오류, 개선 제안, 저작권 및 개인정보 관련 문의는 fantasymaister@gmail.com으로 보내주세요."
-      ]
-    ]
-  },
-
-  updates: {
-    title: "업데이트 내역",
-    sections: [
-      [
-        "v1.0.0-beta",
-        "제국력 출생 연도 선택, 종족별 수명, 가족 소개, 자동 시간 진행, 성장 시스템, 사건과 선택, 13개 세계 랭킹, 저작권 안내 및 서비스 정책 페이지를 통합했습니다."
-      ],
-      [
-        "개발 예정",
-        "독립 NPC, 결혼과 자녀의 성장, 영지 운영, 국가 전쟁, 다양한 사건, 서버 검증형 랭킹 및 랭킹 삭제 기능을 개발할 예정입니다."
-      ]
-    ]
-  }
-};
-
 function showLegal(key) {
-  const page = LEGAL[key];
-
-  if (!page) return;
-
-  $("legalTitle").textContent = page.title;
-  $("legalBody").replaceChildren();
-
-  page.sections.forEach(section => {
-    const heading = document.createElement("h3");
-    heading.textContent = section[0];
-
-    const paragraph = document.createElement("p");
-    paragraph.textContent = section[1];
-
-    $("legalBody").appendChild(heading);
-    $("legalBody").appendChild(paragraph);
-  });
-
+  previousPage=p?"game":"home";
+  legalPage=key;
+  renderLegal();
   showPage("legal");
 }
 
-// 1.2초마다 진행. 배속에 따라 여러 달 진행.
-setInterval(() => {
-  for (let i = 0; i < speed; i++) {
-    if (!p || paused) break;
+function renderLegal() {
+  const sections=LEGAL[legalPage];
+  if (!sections) return;
 
-    advance();
-  }
-}, 1200);
+  const index=lang==="ko"?0:1;
 
-// 저장된 인생 불러오기
-try {
-  const raw = localStorage.getItem(SAVE_KEY);
+  $("legalTitle").textContent=sections[0][index];
+  $("legalBody").replaceChildren();
 
-  if (raw) {
-    const saved = JSON.parse(raw);
+  sections.slice(1).forEach(section=>{
+    const h=document.createElement("h3");
+    h.textContent=section[lang==="ko"?0:2];
 
-    if (saved && saved.name) {
-      p = saved;
-      homeNick = p.nickname;
+    const paragraph=document.createElement("p");
+    paragraph.textContent=section[lang==="ko"?1:3];
 
-      $("nickname").value = homeNick;
-
-      paused = !!p.pending || !p.alive;
-
-      showPage("game");
-      render();
-    }
-  }
-} catch (error) {
-  console.error("저장 데이터 불러오기 실패:", error);
+    $("legalBody").append(h,paragraph);
+  });
 }
 
-buildRankButtons();
+function backFromLegal() {
+  legalPage=null;
+  showPage(previousPage);
+}
+
+setInterval(()=>{
+  for (let i=0;i<speed;i++) {
+    if (!p || paused) break;
+    advance();
+  }
+},1200);
+
+try {
+  const raw=localStorage.getItem(SAVE_KEY);
+
+  if (raw) {
+    const saved=JSON.parse(raw);
+
+    if (saved && saved.name) {
+      p=saved;
+      $("nickname").value=p.nickname;
+      paused=!!p.pending || !p.alive;
+      showPage("game");
+    }
+  }
+} catch(error) {
+  console.error("Load failed:",error);
+}
+
+setLanguage(lang);
 loadRanks("prestige");
 </script>
-
 </body>
 </html>`;
 
-function sendJSON(res, status, data) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff"
+function json(res,status,data) {
+  res.writeHead(status,{
+    "Content-Type":"application/json; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff"
   });
 
   res.end(JSON.stringify(data));
 }
 
-function validNumber(value) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(
-      1000000000,
-      Math.floor(number)
-    )
-  );
+function safeNumber(value) {
+  const n=Number(value);
+  return Number.isFinite(n)
+    ?Math.max(0,Math.min(1000000000,Math.floor(n)))
+    :0;
 }
 
-async function handle(req, res) {
-  const url = new URL(
-    req.url,
-    "http://localhost"
-  );
+async function handle(req,res) {
+  const url=new URL(req.url,"http://localhost");
 
-  if (
-    url.pathname === "/api/rankings" &&
-    req.method === "GET"
-  ) {
+  if (url.pathname==="/api/health") {
+    return json(res,200,{
+      ok:true,
+      database:dbReady,
+      version:VERSION
+    });
+  }
+
+  if (url.pathname==="/api/rankings" && req.method==="GET") {
     if (!dbReady) {
-      return sendJSON(res, 200, {
-        enabled: false,
-        rows: []
-      });
+      return json(res,200,{enabled:false,rows:[]});
     }
 
-    const requested = url.searchParams.get("type");
-
-    const type = Object.prototype.hasOwnProperty.call(
-      RANKS,
-      requested
-    )
-      ? requested
-      : "prestige";
+    const requested=url.searchParams.get("type");
+    const type=RANK_KEYS.includes(requested)
+      ?requested:"prestige";
 
     try {
-      const result = await db.query(
-        "SELECT nickname, character_name, " +
-        "prestige, money, sword, magic, health, luck, " +
-        "children, military, territory, intelligence, " +
-        "adventure, longevity, overall " +
-        "FROM fantasy_rankings " +
-        "ORDER BY " + type + " DESC, updated_at ASC " +
-        "LIMIT 20"
+      const result=await db.query(
+        "SELECT nickname,character_name,"+
+        RANK_KEYS.join(",")+
+        " FROM fantasy_rankings "+
+        "ORDER BY "+type+" DESC,updated_at ASC LIMIT 20"
       );
 
-      return sendJSON(res, 200, {
-        enabled: true,
-        rows: result.rows
+      return json(res,200,{
+        enabled:true,
+        rows:result.rows
       });
-    } catch (error) {
-      console.error("랭킹 조회 실패:", error);
-
-      return sendJSON(res, 503, {
-        enabled: false,
-        rows: []
-      });
+    } catch(error) {
+      console.error(error);
+      return json(res,503,{enabled:false,rows:[]});
     }
   }
 
-  if (
-    url.pathname === "/api/rankings" &&
-    req.method === "POST"
-  ) {
+  if (url.pathname==="/api/rankings" && req.method==="POST") {
     if (!dbReady) {
-      return sendJSON(res, 503, {
-        message: "데이터베이스가 연결되지 않았습니다."
+      return json(res,503,{
+        message:"Database unavailable."
       });
     }
 
-    let raw = "";
+    let raw="";
 
     try {
       for await (const chunk of req) {
-        raw += chunk;
+        raw+=chunk;
 
-        if (raw.length > 10000) {
-          return sendJSON(res, 413, {
-            message: "요청 크기가 너무 큽니다."
+        if (raw.length>10000) {
+          return json(res,413,{
+            message:"Request too large."
           });
         }
       }
 
-      const data = JSON.parse(raw);
+      const data=JSON.parse(raw);
+      const clean=(v,max)=>String(v??"").trim().slice(0,max);
 
-      const safeText = (value, max) =>
-        String(value ?? "")
-          .trim()
-          .slice(0, max);
-
-      const id =
-        safeText(data.id, 100) ||
-        crypto.randomUUID();
-
-      const nickname = safeText(
-        data.nickname,
-        24
-      );
-
-      const character = safeText(
-        data.character_name,
-        80
-      );
-
-      const race = safeText(
-        data.race,
-        30
-      );
+      const id=clean(data.id,100)||crypto.randomUUID();
+      const nickname=clean(data.nickname,24);
+      const character=clean(data.character_name,80);
+      const race=clean(data.race,30);
 
       if (!nickname || !character) {
-        return sendJSON(res, 400, {
-          message: "닉네임과 캐릭터 이름이 필요합니다."
+        return json(res,400,{
+          message:"Nickname and character name required."
         });
       }
 
-      const fields = [
-        "prestige",
-        "money",
-        "sword",
-        "magic",
-        "health",
-        "luck",
-        "children",
-        "military",
-        "territory",
-        "intelligence",
-        "adventure",
-        "longevity",
-        "overall"
+      const columns=[
+        "id","nickname","character_name","race","age",
+        ...RANK_KEYS
       ];
 
-      const columns = [
-        "id",
-        "nickname",
-        "character_name",
-        "race",
-        "age",
-        ...fields
+      const values=[
+        id,nickname,character,race,safeNumber(data.age),
+        ...RANK_KEYS.map(key=>safeNumber(data[key]))
       ];
 
-      const values = [
-        id,
-        nickname,
-        character,
-        race,
-        validNumber(data.age),
-        ...fields.map(key => validNumber(data[key]))
-      ];
-
-      const placeholders = columns.map(
-        (_, index) => "$" + (index + 1)
+      const placeholders=columns.map(
+        (_,i)=>"$"+(i+1)
       ).join(",");
 
-      const updates = columns.slice(1).map(
-        (column, index) =>
-          column + "=$" + (index + 2)
+      const updates=columns.slice(1).map(
+        (key,i)=>key+"=$"+(i+2)
       ).join(",");
 
-      const query =
-        "INSERT INTO fantasy_rankings (" +
-        columns.join(",") +
-        ") VALUES (" +
-        placeholders +
-        ") ON CONFLICT (id) DO UPDATE SET " +
-        updates +
-        ", updated_at=NOW()";
+      await db.query(
+        "INSERT INTO fantasy_rankings ("+
+        columns.join(",")+
+        ") VALUES ("+placeholders+") "+
+        "ON CONFLICT(id) DO UPDATE SET "+
+        updates+",updated_at=NOW()",
+        values
+      );
 
-      await db.query(query, values);
-
-      return sendJSON(res, 200, {
-        message: "세계 랭킹에 기록을 등록했습니다."
+      return json(res,200,{
+        message:"Leaderboard record submitted."
       });
-    } catch (error) {
-      console.error("랭킹 등록 실패:", error);
-
-      return sendJSON(res, 400, {
-        message: "랭킹 등록 중 오류가 발생했습니다."
+    } catch(error) {
+      console.error(error);
+      return json(res,400,{
+        message:"Unable to submit record."
       });
     }
   }
 
-  if (url.pathname === "/api/health") {
-    return sendJSON(res, 200, {
-      ok: true,
-      database: dbReady,
-      version: VERSION
+  if (req.method!=="GET") {
+    return json(res,405,{
+      message:"Method not allowed."
     });
   }
 
-  if (req.method !== "GET") {
-    return sendJSON(res, 405, {
-      message: "허용되지 않은 요청입니다."
-    });
-  }
-
-  res.writeHead(200, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "strict-origin-when-cross-origin"
+  res.writeHead(200,{
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"strict-origin-when-cross-origin"
   });
 
   res.end(HTML);
 }
 
 async function start() {
-  await initializeDatabase();
+  await initDB();
 
-  http.createServer((req, res) => {
-    handle(req, res).catch(error => {
-      console.error("서버 오류:", error);
+  http.createServer((req,res)=>{
+    handle(req,res).catch(error=>{
+      console.error(error);
 
       if (!res.headersSent) {
-        sendJSON(res, 500, {
-          message: "서버 오류가 발생했습니다."
+        json(res,500,{
+          message:"Internal server error."
         });
       }
     });
-  }).listen(PORT, "0.0.0.0", () => {
-    console.log(
-      "판타지에서 살아가기 실행:",
-      PORT
-    );
-    console.log("버전:", VERSION);
+  }).listen(PORT,"0.0.0.0",()=>{
+    console.log("Fantasy Life running on port "+PORT);
+    console.log("Version: "+VERSION);
   });
 }
 
-start().catch(error => {
-  console.error("서버 시작 실패:", error);
+start().catch(error=>{
+  console.error(error);
   process.exit(1);
 });
