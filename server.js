@@ -1,92 +1,213 @@
 
 const http = require("node:http");
-const PORT = process.env.PORT || 3000;
+const { randomUUID } = require("node:crypto");
 
-const html = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
+const PORT = process.env.PORT || 3000;
+let db = null;
+
+try {
+  if (process.env.DATABASE_URL) {
+    const { Pool } = require("pg");
+    db = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+  }
+} catch (e) {
+  console.log("DB 설정 확인:", e.message);
+}
+
+const world = [
+  { continent:"루벨리아", countries:[
+    ["에테르 왕국","아르덴","농업과 기사단"],
+    ["발테리온 제국","발테르","군사와 정치"],
+    ["로젠하임 공국","로젠","상업과 귀족"]
+  ]},
+  { continent:"실바리아", countries:[
+    ["엘드라실 연방","엘드라","엘프와 정령"],
+    ["미르벨 수림왕국","미르벨","원시림과 마법"],
+    ["하르넬 자유도시","하르넬","무역과 학문"]
+  ]},
+  { continent:"카르둠", countries:[
+    ["두르가르 산악왕국","두르가르","광업과 대장장이"],
+    ["아스란 부족연맹","아스란","수인과 부족"],
+    ["철관령","카르헨","요새와 군수"]
+  ]},
+  { continent:"네크라스", countries:[
+    ["벨제르 마도국","벨제르","마족과 마법"],
+    ["아르카스 용혈제국","아르카스","용인과 전사"],
+    ["사하르 상업연합","사하르","사막과 교역"]
+  ]},
+  { continent:"아우렐리아", countries:[
+    ["솔라리스 성국","솔라리스","성직자와 신앙"],
+    ["천공도시 이스테라","이스테라","천족과 비술"],
+    ["고대왕조 에리온","에리온","고대 유적"]
+  ]}
+];
+
+async function initDB() {
+  if (!db) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS fantasy_rankings (
+        id TEXT PRIMARY KEY,
+        nickname VARCHAR(24) NOT NULL,
+        character_name VARCHAR(80) NOT NULL,
+        race VARCHAR(30) NOT NULL,
+        age INTEGER NOT NULL,
+        prestige INTEGER NOT NULL DEFAULT 0,
+        money INTEGER NOT NULL DEFAULT 0,
+        sword INTEGER NOT NULL DEFAULT 0,
+        magic INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("랭킹 DB 연결 완료");
+  } catch (e) {
+    console.error("DB 초기화 오류:", e.message);
+    db = null;
+  }
+}
+initDB();
+
+const css = `
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f4;color:#27313a;
+font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;
+line-height:1.7}
+main{max-width:850px;margin:auto;padding:28px 18px 80px}
+h1{font-size:28px;margin:12px 0 4px}
+h2{font-size:19px;margin:0 0 14px}
+h3{font-size:16px}
+.muted,small{color:#74808a}
+.card{background:white;border:1px solid #dce1df;
+border-radius:10px;padding:22px;margin:16px 0}
+button{padding:10px 16px;background:#334c5b;color:white;
+border:0;border-radius:6px;cursor:pointer;margin:4px 4px 4px 0}
+button:hover{background:#496b7e}
+button:disabled{opacity:.45}
+input{padding:11px;border:1px solid #ccd4d8;
+border-radius:6px;width:100%;font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{padding:10px;border-bottom:1px solid #e6e9eb;text-align:left}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.stat{background:#f2f5f6;padding:11px;border-radius:6px}
+.stat b{display:block;font-size:18px}
+.bar{height:8px;background:#e5e9ed;border-radius:5px;overflow:hidden}
+.fill{height:100%;background:#65899c}
+.red{background:#cb7474}.blue{background:#729bc9}
+.green{background:#82a784}
+.hidden{display:none}
+.choice{display:block;width:100%;text-align:left;background:#edf2f5;
+color:#283a45;border:1px solid #d6e0e5;margin:8px 0}
+.choice:hover{background:#dae7ee}
+.log{padding:10px 0;border-bottom:1px solid #e5e8eb;font-size:14px}
+footer{border-top:1px solid #dce1df;margin-top:30px;
+padding-top:22px;color:#66747b;font-size:13px}
+a{color:#416a80;margin-right:12px;cursor:pointer}
+#event{border-left:4px solid #9b8052}
+@media(max-width:550px){main{padding:14px}.card{padding:16px}}
+`;
+
+const html = `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>판타지에서 살아가기</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#10151e;color:#eee5d4;font-family:system-ui,-apple-system,sans-serif}
-main{max-width:800px;margin:auto;padding:22px}
-h1{text-align:center;color:#e9c17d}
-h2{color:#e9c17d}
-.subtitle{text-align:center;color:#aaa}
-.panel{background:#1b2534;border:1px solid #45485a;border-radius:14px;padding:20px;margin:16px 0}
-button{background:#b99254;border:0;color:#171717;padding:12px 16px;border-radius:9px;font-weight:bold;cursor:pointer;margin:5px}
-button:hover{background:#e3bd7c}
-button:disabled{opacity:.4}
-input,select{background:#29364a;color:white;border:1px solid #777;border-radius:8px;padding:12px;width:100%;font-size:16px}
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
-.stat{background:#2b3648;padding:12px;border-radius:9px}
-.stat small{display:block;color:#adb5c4;margin-bottom:5px}
-#log{max-height:420px;overflow:auto}
-.entry{padding:12px;border-bottom:1px solid #394356;line-height:1.65}
-.good{color:#a7e6ae}.bad{color:#f3a7a7}
-#event{border-color:#d9ad60;background:#302c31}
-#eventText{white-space:pre-line;line-height:1.8}
-.choice{display:block;width:100%;text-align:left;margin:8px 0}
-.hidden{display:none!important}
-.notice{color:#b8c2d0;font-size:13px}
-</style>
-</head>
-<body>
-<main>
-<h1>⚔ 판타지에서 살아가기</h1>
-<p class="subtitle" id="subtitle">당신은 어떤 삶을 살게 될까?</p>
+<style>${css}</style></head>
+<body><main>
+<header>
+<h1>판타지에서 살아가기</h1>
+<p class="muted">당신은 이 세계에서 어떤 삶을 살게 될까요?</p>
+</header>
 
-<section id="birth" class="panel">
+<section id="home">
+<div class="card">
 <h2>새로운 인생</h2>
+<p>다섯 대륙, 열다섯 국가 중 한 곳에서 태어납니다.
+종족과 신분, 가족, 운명은 태어날 때 결정됩니다.</p>
 <label>플레이어 닉네임</label>
-<input id="username" maxlength="16" placeholder="닉네임 입력">
-<p class="notice">닉네임과 캐릭터 이름은 서로 달라.</p>
-<div id="birthInfo"></div>
-<button onclick="reroll()">다시 태어나기</button>
-<button onclick="start()">이 인생으로 시작</button>
+<input id="nickname" maxlength="16" placeholder="닉네임 입력">
+<p><button onclick="newLife()">태어나기</button></p>
+</div>
+
+<div class="card">
+<h2>세계 랭킹</h2>
+<p class="muted" id="rankNotice">랭킹 불러오는 중...</p>
+<button onclick="loadRanks('prestige')">명성</button>
+<button onclick="loadRanks('money')">재산</button>
+<button onclick="loadRanks('sword')">검술</button>
+<button onclick="loadRanks('magic')">마법</button>
+<div id="ranking"></div>
+</div>
+
+<div class="card">
+<h2>어떻게 진행되나요?</h2>
+<p>0세부터 한 사람의 인생이 시작됩니다.
+시간은 자동으로 흐르며 중요한 사건이 발생하면 잠시 멈춥니다.
+플레이어는 사건에 대응하는 방법을 선택할 수 있습니다.</p>
+<p>전쟁과 재난 같은 불행한 사건도 좋은 결과로 이어질 수 있고,
+뜻밖의 행운도 잘못된 선택으로 불행해질 수 있습니다.</p>
+<p>세계의 국가와 대륙은 고정되어 있지만
+플레이어의 출생과 사건은 무작위입니다.
+각 종족은 서로 다른 자연 수명을 갖습니다.</p>
+<p>이 게임은 실제 통계에 기반한 시뮬레이션이 아닙니다.
+세계관과 확률은 게임을 위해 설정한 가상의 수치입니다.</p>
+</div>
 </section>
 
 <section id="game" class="hidden">
-<div class="panel">
-<h2 id="identity"></h2>
-<p id="timeInfo"></p>
-<div class="stats" id="stats"></div>
-<p id="status"></p>
-<button onclick="togglePause()" id="pauseBtn">일시정지</button>
+<div class="card">
+<h2 id="charTitle"></h2>
+<p id="charInfo"></p>
+<div class="grid" id="stats"></div>
+<p id="lifeStatus" class="muted"></p>
+<button onclick="togglePause()">일시정지 / 계속</button>
 <button onclick="changeSpeed()">속도 변경</button>
-<button onclick="restart()">새 인생</button>
+<button onclick="publishRank()">랭킹 기록 등록</button>
+<button onclick="goHome()">첫 화면</button>
 </div>
 
-<div id="event" class="panel hidden">
+<div class="card" id="event">
 <h2 id="eventTitle"></h2>
 <p id="eventText"></p>
 <div id="choices"></div>
 </div>
 
-<div class="panel">
-<h2>📜 인생 연대기</h2>
-<div id="log"></div>
+<div class="card">
+<h2>인생 연대기</h2>
+<div id="history"></div>
 </div>
 </section>
-</main>
 
+<section id="legal" class="card hidden">
+<button onclick="showPage('home')">돌아가기</button>
+<h2 id="legalTitle"></h2>
+<div id="legalBody"></div>
+</section>
+
+<footer>
+<p><b>판타지에서 살아가기</b> · 베타 서비스</p>
+<p>
+<a onclick="showLegal('privacy')">개인정보 처리방침</a>
+<a onclick="showLegal('terms')">이용약관</a>
+<a onclick="showLegal('notice')">운영 안내</a>
+<a onclick="showLegal('updates')">업데이트 내역</a>
+</p>
+<p>이 게임은 창작된 판타지 세계를 배경으로 하며
+전쟁, 질병, 사망, 범죄와 같은 사건을 포함합니다.</p>
+<p>문의처와 운영자 정보는 실제 서비스 운영 전에 확정하여 게시해야 합니다.</p>
+</footer>
+</main>
 <script>
 const $=id=>document.getElementById(id);
-const random=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-const pick=a=>a[random(0,a.length-1)];
-const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const world=${JSON.stringify(world)};
 const races=[
-["인간",65,68,100],
-["엘프",12,250,500],
-["드워프",8,130,220],
-["수인",6,55,95],
-["마족",4,150,300],
-["용인족",2.5,220,420],
-["정령족",1.5,300,650],
-["천족",.7,350,700],
+["인간",65,68,100],["엘프",12,250,500],
+["드워프",8,130,220],["수인",6,55,95],
+["마족",4,150,300],["용인족",2.5,220,420],
+["정령족",1.5,300,650],["천족",.7,350,700],
 ["고대종",.3,500,1000]
 ];
 const ranks=[
@@ -99,371 +220,399 @@ const fates=[
 ["신의 사도",.010],["세계의 오류",.005],
 ["용사의 운명",.010]
 ];
-function weighted(items){
-let r=Math.random()*100;
-for(const x of items){r-=x[1];if(r<0)return x;}
-return items[items.length-1];
+function weighted(a){
+let n=Math.random()*a.reduce((s,x)=>s+x[1],0);
+for(const x of a){n-=x[1];if(n<=0)return x;}
+return a[a.length-1];
 }
-function fate(){
-let r=Math.random()*100;
-for(const x of fates){r-=x[1];if(r<0)return x[0];}
+function hiddenFate(){
+let n=Math.random()*100;
+for(const x of fates){n-=x[1];if(n<0)return x[0];}
 return "평범한 운명";
 }
-const koreanFamily=["김","이","박","최","정","강","조","윤","장","임","한","오","서","신","권","황","안","송","류","홍"];
-const koreanFirst=["도","하","서","지","윤","민","예","유","시","태","은","현","준","수","연","채","우","다","라","아"];
-const koreanLast=["준","윤","현","아","린","우","호","진","서","영","민","율","희","원","빈","하","온","은","혁","별"];
-const fantasyFirst=["레온","카일","아델","세리아","엘리시아","루시안","아르웬","카르둠","아자르","벨리안","에르단","리오넬","엘레나","이사벨","드레이크","테오","리아나","아스란","제노","라헬"];
-const fantasyMiddle=["아","엘","리","온","테","카","벨","드","린","시아","노","루","라","미","렌","스","타","디","아르","페"];
-const fantasyLast=["리온","시아","테르","리스","엘","란","드","벨","미르","스","온","니아","델","르","안","가르","피르","나","시아스","렌"];
-const houses=["발테리온","실바리스","아이언포지","로젠하임","아스텔","드라코니아","벨페리온","윈터하트","블랙손","아르카디아","스톰브링어","루미나르"];
-
-function generateName(){
-if(Math.random()<.35)
-return pick(koreanFamily)+pick(koreanFirst)+pick(koreanLast);
-return pick(fantasyFirst)+pick(fantasyMiddle)+pick(fantasyLast)+" "+pick(houses);
+const first=["레온","카일","세리아","엘리안","아델",
+"루시안","아르웬","테오","리안","벨라","드란","에리카"];
+const last=["아르벨","실바","카르둠","발테르","로젠",
+"엘드라","미르벨","아스란","하르넬","벨제르"];
+const jobs=["농부","대장장이","상인","사냥꾼","서기관",
+"약초사","병사","목수","재봉사","마법사"];
+const traits=["다정한","엄격한","성실한","과묵한",
+"명랑한","신중한","고집 센","온화한"];
+const events=[
+["산적의 습격","여행길에 산적들이 나타났다.","bad","sword"],
+["대지진","건물이 무너지고 사람들이 도움을 청한다.","bad","knowledge"],
+["왕국의 전쟁","국경에서 전쟁이 시작됐다.","bad","sword"],
+["전염병","마을에 원인 모를 질병이 퍼지고 있다.","bad","knowledge"],
+["마물의 습격","숲에서 마물이 나타났다.","bad","sword"],
+["가문의 빚","가족에게 오래된 빚이 있다는 사실을 알았다.","bad","knowledge"],
+["화재","마을 창고에 큰불이 났다.","bad","sword"],
+["귀족의 음모","억울한 누명을 쓴 사람이 도움을 요청한다.","bad","knowledge"],
+["뜻밖의 유산","먼 친척이 재산을 남겼다는 소식이 왔다.","good","knowledge"],
+["숨겨진 보물","오래된 보물 지도를 발견했다.","good","knowledge"],
+["검술 스승","뛰어난 검사가 제자를 모집한다.","good","sword"],
+["마탑의 초대","마탑에서 재능 검사를 진행한다.","good","magic"],
+["정령의 축복","작은 정령이 다가와 도움을 제안한다.","good","magic"],
+["상단의 제안","상인이 새로운 거래를 제안한다.","good","knowledge"],
+["왕실 포상","왕실에서 공로자를 찾고 있다.","good","prestige"],
+["치유의 샘","병을 낫게 한다는 샘이 발견됐다.","good","magic"],
+["축제의 우승","지역 축제에서 경연 대회가 열린다.","good","sword"],
+["고대 유적","탐험가가 유적 탐사에 동행하자고 한다.","good","knowledge"],
+["실종된 여행자","길을 잃은 여행자를 발견했다.","bad","knowledge"],
+["수상한 마법서","봉인된 책에서 이상한 빛이 새어 나온다.","bad","magic"]
+];
+const legalTexts={
+privacy:{
+title:"개인정보 처리방침 (초안)",
+body:"이 게임은 회원가입 없이 이용할 수 있도록 설계되었습니다. "+
+"게임 진행 기록은 이용자의 브라우저에 저장됩니다. "+
+"이용자가 랭킹 등록을 선택하면 닉네임, 캐릭터 이름, "+
+"종족, 나이, 게임 점수 및 기록 식별자가 서버에 저장될 수 있습니다. "+
+"랭킹 기록은 다른 이용자에게 공개됩니다. "+
+"랭킹 삭제 기능은 등록한 브라우저에서 이용할 수 있도록 준비되어 있습니다. "+
+"호스팅 제공자의 접속 기록 등 실제 처리되는 정보, 보관 기간, "+
+"처리 위탁 및 국외 이전 사항은 운영 환경을 확인해 정식 방침에 명시해야 합니다."
+},
+terms:{
+title:"이용약관 (초안)",
+body:"본 서비스는 가상의 판타지 인생 시뮬레이션입니다. "+
+"게임 내 사건과 확률은 현실의 사실이나 통계를 나타내지 않습니다. "+
+"이용자는 다른 사람을 사칭하거나 랭킹을 조작해서는 안 됩니다. "+
+"운영자는 서비스 개선을 위해 기능을 변경할 수 있습니다. "+
+"유료 서비스가 도입되는 경우 별도의 이용 조건을 마련합니다."
+},
+notice:{
+title:"운영 안내",
+body:"현재 베타 서비스입니다. "+
+"게임에는 전쟁, 재난, 질병, 사망 등 무거운 주제가 포함될 수 있습니다. "+
+"게임 내 등장인물, 국가, 사건은 허구입니다. "+
+"운영자 명칭, 연락처, 서비스 주소, 개인정보 담당 연락처는 "+
+"실제 운영 정보로 확인한 뒤 게시해야 합니다."
+},
+updates:{
+title:"업데이트 내역",
+body:"v0.8 — 고정 대륙과 국가, 출생 가족 설명, 상태창, "+
+"자동 시간 진행, 랜덤 사건, 랭킹 연동 구조, "+
+"개인정보 처리방침 및 이용약관 초안 추가."
 }
-
-let birth=null,p=null,paused=false,speed=1,ticks=0;
-
-function reroll(){
+};
+let p=null,paused=true,speed=1;
+let homeNick="";
+function showPage(page){
+$("home").classList.toggle("hidden",page!=="home");
+$("game").classList.toggle("hidden",page!=="game");
+$("legal").classList.toggle("hidden",page!=="legal");
+window.scrollTo(0,0);
+}
+function showLegal(key){
+const item=legalTexts[key];
+$("legalTitle").textContent=item.title;
+$("legalBody").textContent=item.body;
+showPage("legal");
+}
+function newLife(){
+const nickname=$("nickname").value.trim();
+if(!nickname){alert("닉네임을 입력해 줘.");return;}
+homeNick=nickname;
+const continent=pick(world);
+const country=pick(continent.countries);
 const race=weighted(races);
-birth={
-name:generateName(),race:race[0],
-rank:weighted(ranks)[0],fate:fate(),
-lifespan:random(race[2],race[3])
+const rank=weighted(ranks)[0];
+const father=pick(first)+" "+pick(last);
+const mother=pick(first)+" "+pick(last);
+const fatherJob=pick(jobs),motherJob=pick(jobs);
+const familyMoney=rank==="왕족"?500:
+rank.includes("귀족")?200:rank==="상인 가문"?130:40;
+p={
+id:crypto.randomUUID(),nickname,
+name:pick(first)+" "+pick(last),
+race:race[0],lifespan:rnd(race[2],race[3]),
+rank,continent:continent.continent,
+country:country[0],capital:country[1],
+father,mother,fatherJob,motherJob,
+fatherTrait:pick(traits),motherTrait:pick(traits),
+fate:hiddenFate(),age:0,month:0,
+hp:100,maxHp:100,mp:30,maxMp:30,
+sp:100,maxSp:100,money:familyMoney,
+sword:0,magic:0,knowledge:0,prestige:0,
+history:[],pending:null,alive:true
 };
-$("birthInfo").innerHTML=
-"<p>캐릭터 이름: <b>"+birth.name+"</b></p>"+
-"<p>종족: "+birth.race+"</p>"+
-"<p>신분: "+birth.rank+"</p>"+
-"<p class='notice'>특별한 운명은 출생 시 공개되지 않아.</p>";
-}
-
-function start(){
-const username=$("username").value.trim();
-if(!username){alert("닉네임을 입력해 줘!");return;}
-p={...birth,username,age:0,month:0,
-health:100,money:50,skill:0,knowledge:0,
-magic:0,prestige:0,alive:true,
-pending:null,history:[],eventCount:0};
-record("세상에 태어났다.","");
-$("birth").classList.add("hidden");
-$("game").classList.remove("hidden");
-paused=false;
-save();render();
-}
-
-function record(message,tone=""){
-p.history.unshift({age:p.age,month:p.month,message,tone});
-p.history=p.history.slice(0,300);
-}
-
-const places=[
-"왕도","변경의 숲","산골 마을","상업 도시",
-"항구","고대 유적","드워프 광산","엘프 숲",
-"황무지","마법 도시","국경 요새","사막 오아시스",
-"대성당","빙설 산맥","버려진 성","지하 미궁",
-"왕립 아카데미","정령의 호수","마탑","시장",
-"귀족 저택","여관","농촌","용의 협곡"
-];
-const people=[
-"떠돌이 기사","상인","노인","마법사",
-"수상한 여행자","귀족","용병","사제",
-"정령","대장장이","모험가","농민",
-"엘프 궁수","드워프 장인","마족 사절","어린아이",
-"도둑","왕실 기사","학자","치유사"
-];
-const situations=[
-"폭풍이 몰아치는 밤","축제가 열리는 날",
-"평화로운 아침","겨울이 시작될 무렵",
-"수확이 끝난 날","왕국의 기념일",
-"안개가 짙은 새벽","보름달이 뜬 밤",
-"전쟁 소문이 퍼진 날","비가 내리는 오후",
-"시장에 사람이 몰린 날","긴 가뭄이 이어지던 때"
-];
-
-const eventTypes=[
-["산적의 습격","산적 무리가 길을 막고 금화를 요구한다.","bad","skill"],
-["마물 출현","마을 근처에 위험한 마물이 나타났다.","bad","skill"],
-["대지진","땅이 흔들리고 건물들이 무너지고 있다.","bad","knowledge"],
-["전염병","원인을 알 수 없는 병이 퍼지고 있다.","bad","knowledge"],
-["왕국 전쟁","국경에서 전쟁이 시작됐다는 소식이 들린다.","bad","skill"],
-["홍수","강이 범람해 집들이 물에 잠기고 있다.","bad","knowledge"],
-["화재","큰불이 번지며 사람들이 도움을 요청한다.","bad","skill"],
-["흉년","농작물이 말라 식량이 부족해지고 있다.","bad","knowledge"],
-["도둑","누군가 귀중품을 훔쳐 달아났다.","bad","skill"],
-["저주받은 유물","검은 기운을 내뿜는 유물이 발견됐다.","bad","magic"],
-["귀족의 음모","권력자가 누군가에게 누명을 씌우려 한다.","bad","knowledge"],
-["실종 사건","주민 한 명이 흔적도 없이 사라졌다.","bad","knowledge"],
-["노예 상인","붙잡힌 사람들이 도움을 청한다.","bad","skill"],
-["마법 폭주","마법 실험이 실패해 마력이 폭주한다.","bad","magic"],
-["괴수의 습격","거대한 괴수가 도시로 다가온다.","bad","skill"],
-["숨겨진 보물","오래된 보물 지도가 발견됐다.","good","knowledge"],
-["귀인의 도움","유력한 인물이 재능을 알아보고 도움을 제안한다.","good","prestige"],
-["마법 재능 발견","마력에 특별한 반응이 나타났다.","good","magic"],
-["검술의 깨달음","오랜 고민 끝에 새로운 검술의 실마리를 찾았다.","good","skill"],
-["뜻밖의 유산","먼 친척이 남긴 재산에 관한 소식이 도착했다.","good","knowledge"],
-["정령의 축복","정령이 작은 선물을 건네려 한다.","good","magic"],
-["왕실의 포상","왕실에서 공로자를 찾고 있다.","good","prestige"],
-["상단의 제안","상인이 큰 이익을 낼 거래를 제안한다.","good","knowledge"],
-["스승과의 만남","뛰어난 스승이 제자를 구하고 있다.","good","skill"],
-["고대 도서 발견","잊힌 지식이 담긴 책이 발견됐다.","good","knowledge"],
-["축제의 우승 기회","도시 축제에서 다양한 경연이 열린다.","good","skill"],
-["치유의 샘","상처를 치유한다는 샘이 발견됐다.","good","magic"],
-["친구의 도움","오래된 친구가 어려움을 도와주겠다고 한다.","good","prestige"],
-["광맥 발견","근처 산에서 귀금속 광맥이 발견됐다.","good","knowledge"],
-["신비로운 알","정체 모를 알이 발견돼 사람들의 관심을 끈다.","good","magic"],
-["결혼 제안","유력 가문에서 혼인을 제안해 왔다.","good","prestige"],
-["고대 유적의 발견","탐험가들이 새로운 유적의 입구를 발견했다.","good","knowledge"]
-];
-
-const childhood=[
-["첫 친구","또래 아이가 함께 놀자고 다가왔다.","good","prestige"],
-["마법 재능 검사","마탑에서 아이들의 재능을 검사한다.","good","magic"],
-["길 잃은 아이","낯선 아이가 울면서 도움을 청한다.","bad","knowledge"],
-["낡은 목검","버려진 목검에서 희미한 빛이 새어 나온다.","good","skill"],
-["아픈 가족","가족이 갑자기 병에 걸렸다.","bad","knowledge"],
-["수상한 선물","여행자가 정체 모를 선물을 남겼다.","good","knowledge"]
-];
-
-const fateEvents={
-"회귀자":["반복되는 기억","한 번도 경험하지 않은 미래의 장면이 떠올랐다."],
-"전생자":["전생의 기억","낯선 세계에서 살았던 기억이 꿈에 나타났다."],
-"마왕의 환생":["검은 왕관","꿈속에서 수많은 마물이 무릎을 꿇었다."],
-"용의 화신":["용의 심장","가슴 깊은 곳에서 용의 심장 박동이 느껴졌다."],
-"신의 사도":["신탁","어디선가 자신의 이름을 부르는 신성한 목소리가 들렸다."],
-"세계의 오류":["시간의 균열","주변 시간이 잠시 멈추고 세상이 뒤틀렸다."],
-"용사의 운명":["성검의 부름","먼 곳에서 빛나는 검이 자신을 부르는 느낌이 들었다."]
-};
-
-function makeEvent(){
-let e;
-if(p.age<=12 && Math.random()<.6)e=pick(childhood);
-else if(p.fate!=="평범한 운명" && Math.random()<.04){
-const f=fateEvents[p.fate];
-e=[f[0],f[1],"mystery","magic"];
-}else e=pick(eventTypes);
-
-const place=pick(places),person=pick(people),situation=pick(situations);
-const [title,description,kind,ability]=e;
-
-return {
-title,
-kind,
-ability,
-text:situation+", "+place+"에서 사건이 일어났다.\\n\\n"+
-person+"와 관련된 소식이다. "+description+
-"\\n\\n당신은 어떻게 행동할까?",
-options:[
-{label:"적극적으로 해결한다",type:"challenge"},
-{label:"신중하게 조사한다",type:"investigate"},
-{label:"금화를 사용해 해결한다",type:"pay"},
-{label:"관여하지 않고 떠난다",type:"leave"}
-]
-};
-}
-
-function beginEvent(){
-p.pending=makeEvent();
 paused=true;
-record("사건 발생: "+p.pending.title,"");
-render();
+p.pending={
+title:"0세 — 탄생",
+text:"당신은 "+p.continent+" 대륙, "+p.country+
+"의 한 가정에서 태어났습니다.\\n\\n"+
+"아버지 "+father+"은(는) "+fatherJob+
+" 일을 하는 "+p.fatherTrait+" 사람입니다.\\n"+
+"어머니 "+mother+"은(는) "+motherJob+
+" 일을 하는 "+p.motherTrait+" 사람입니다.\\n\\n"+
+"당신의 가문은 "+rank+" 계층에 속합니다. "+
+"가족은 저마다의 사정 속에서 당신을 맞이했습니다.",
+birth:true
+};
+addLog("이 세계에 태어났다.");
+save();showPage("game");render();
 }
-
-function chance(base,ability){
-const stat=p[ability]||0;
-return clamp(base+Math.floor(stat/5),8,92);
+function addLog(text){
+p.history.unshift({age:p.age,month:p.month,text});
+p.history=p.history.slice(0,250);
 }
-function resolve(index){
-if(!p||!p.pending||!p.alive)return;
+function nextEvent(){
+const e=pick(events);
+p.pending={
+title:e[0],text:e[1],kind:e[2],ability:e[3]
+};
+paused=true;
+addLog(e[0]+" 사건이 발생했다.");
+}
+function resolveEvent(choice){
+if(!p||!p.pending)return;
+if(p.pending.birth){
+p.pending=null;paused=false;
+addLog("가족과 함께 첫 번째 삶을 시작했다.");
+save();render();return;
+}
 const e=p.pending;
-const option=e.options[index];
-let success=false,description="",tone="";
-
-if(option.type==="challenge"){
-success=Math.random()*100<chance(43,e.ability);
+const ability=p[e.ability]||0;
+let success=false,summary="";
+if(choice===0){
+success=Math.random()*100<Math.min(90,45+ability*2);
 if(success){
-p.money+=random(20,110);
-p.prestige+=random(3,10);
-p[e.ability]=(p[e.ability]||0)+random(2,6);
-description="위험을 무릅쓰고 문제를 해결했다. 보상과 명성을 얻었다.";
-tone="good";
+p.money+=rnd(20,90);p.prestige+=5;
+p[e.ability]=(p[e.ability]||0)+3;
+summary="적극적으로 행동해 사건을 해결하고 보상을 얻었다.";
 }else{
-p.health-=random(5,19);
-p.money=Math.max(0,p.money-random(5,45));
-description="무리하게 행동하다 실패했다. 부상을 입거나 재산을 잃었다.";
-tone="bad";
+p.hp-=rnd(5,18);p.money=Math.max(0,p.money-15);
+summary="위험을 감수했지만 실패해 손해를 입었다.";
 }
-}
-else if(option.type==="investigate"){
-success=Math.random()*100<chance(65,"knowledge");
-p.knowledge+=random(1,4);
+}else if(choice===1){
+success=Math.random()*100<Math.min(90,65+p.knowledge*2);
+p.knowledge+=2;
 if(success){
-p.money+=random(10,65);
-p.prestige+=3;
-description="상황을 신중히 살펴 유리한 해결책을 찾아냈다.";
-tone="good";
+p.money+=25;p.prestige+=2;
+summary="신중하게 조사해 좋은 결과를 얻었다.";
 }else{
-p.health-=random(0,7);
-description="단서를 찾았지만 사건을 완전히 해결하지는 못했다.";
-tone="bad";
+summary="조사했지만 원하는 결과를 얻지 못했다.";
 }
-}
-else if(option.type==="pay"){
-const cost=30;
-if(p.money>=cost){
-p.money-=cost;
-p.prestige+=2;
-description="금화 30개를 사용해 피해를 줄이거나 문제를 수습했다.";
-tone="good";
 }else{
-description="금화가 부족해 원하는 방식으로 해결하지 못했다.";
-tone="bad";
+summary="사건에 관여하지 않고 지나갔다.";
+if(e.kind==="bad")p.hp=Math.min(p.maxHp,p.hp+1);
 }
-}
-else{
-if(e.kind==="bad"){
-p.health=Math.min(100,p.health+2);
-description="위험을 피하고 무사히 떠났다. 다른 이들이 사건을 해결했을지도 모른다.";
-}else{
-description="기회를 놓치고 평범한 일상으로 돌아갔다.";
-}
-}
-
-if(e.kind==="bad" && tone==="good")
-description="불행한 사건을 기회로 바꾸었다. "+description;
-if(e.kind==="good" && tone==="bad")
-description="좋은 기회였지만 예상치 못한 어려움을 겪었다. "+description;
-
-record(e.title+" — "+option.label+": "+description,tone);
-p.pending=null;
-p.eventCount++;
-paused=false;
-
-if(p.health<=0)die("사건으로 인한 부상");
+if(e.kind==="bad"&&success)
+summary="불행한 일을 기회로 바꾸었다. "+summary;
+if(e.kind==="good"&&!success&&choice!==2)
+summary="좋은 기회였지만 일이 뜻대로 풀리지 않았다. "+summary;
+addLog(e.title+" — "+summary);
+p.pending=null;paused=false;
+if(p.hp<=0)die("사건으로 인한 부상");
 save();render();
 }
-
 function die(reason){
-p.alive=false;
-paused=true;
-p.pending=null;
-record(reason+"으로 생을 마감했다.","bad");
+p.alive=false;paused=true;p.pending=null;
+addLog(reason+"으로 생을 마감했다.");
 }
-
 function advance(){
 if(!p||paused||!p.alive)return;
 p.month++;
 if(p.month>=12){
 p.month=0;p.age++;
-p.skill+=Math.random()<.2?1:0;
-p.knowledge+=Math.random()<.2?1:0;
-if(p.age>50 && p.race==="인간")
-p.health-=random(0,2);
-record("한 해가 지나 "+p.age+"세가 되었다.","");
+if(Math.random()<.3)p.knowledge++;
+if(Math.random()<.2)p.sword++;
+if(p.age>p.lifespan*.7 && Math.random()<.35)p.hp--;
+addLog(p.age+"세가 되었다.");
 }
-if(p.age>=p.lifespan){
-die("노화");
-}else if(p.health<=0){
-die("건강 악화");
-}else if(p.age>=1 && Math.random()<.13){
-beginEvent();
-}
+if(p.age>=p.lifespan)die("노화");
+else if(p.hp<=0)die("건강 악화");
+else if(p.age>=1&&Math.random()<.12)nextEvent();
 save();render();
 }
-
 function togglePause(){
-if(!p||!p.alive||p.pending)return;
+if(!p||p.pending||!p.alive)return;
 paused=!paused;render();
 }
 function changeSpeed(){
-speed=speed===1?2:speed===2?4:1;
-render();
+speed=speed===1?2:speed===2?4:1;render();
 }
-function restart(){
-if(!confirm("현재 인생을 끝내고 새롭게 태어날까?"))return;
-const oldName=p?.username||"";
-localStorage.removeItem("fantasy-life-save-v1");
-p=null;paused=false;
-$("game").classList.add("hidden");
-$("birth").classList.remove("hidden");
-$("username").value=oldName;
-reroll();
+function goHome(){
+showPage("home");
+$("nickname").value=homeNick;
+loadRanks("prestige");
 }
-function save(){
-if(p)localStorage.setItem("fantasy-life-save-v1",JSON.stringify(p));
+function stat(label,value){
+return '<div class="stat"><small>'+label+
+'</small><b>'+value+'</b></div>';
 }
 function render(){
 if(!p)return;
-$("subtitle").textContent="플레이어: "+p.username;
-$("identity").textContent=p.name+" · "+p.age+"세";
-$("timeInfo").textContent=
-"나이: "+p.age+"세 "+p.month+"개월 / "+
-(p.alive?(p.pending?"사건 발생 — 시간 정지":paused?"일시정지":"시간 진행 중"):"사망");
-const values=[
-["종족",p.race],["신분",p.rank],
-["건강",Math.max(0,p.health)],
-["금화",p.money],["검술",p.skill],
-["학문",p.knowledge],["마법",p.magic],
-["명성",p.prestige]
-];
-$("stats").innerHTML=values.map(x=>
-'<div class="stat"><small>'+x[0]+'</small><b>'+x[1]+'</b></div>'
-).join("");
-$("status").textContent=p.alive?
-"진행 속도: "+speed+"배 / 겪은 사건: "+p.eventCount+"회":
-"이 인생은 끝났다. 새로운 인생을 시작할 수 있다.";
-$("pauseBtn").disabled=!!p.pending||!p.alive;
-$("pauseBtn").textContent=paused?"계속 진행":"일시정지";
+$("charTitle").textContent=p.name+" · "+p.age+"세";
+$("charInfo").textContent=p.continent+" 대륙 / "+
+p.country+" / "+p.race+" / "+p.rank;
+$("stats").innerHTML=
+stat("체력 HP",Math.max(0,p.hp)+" / "+p.maxHp)+
+stat("마력 MP",p.mp+" / "+p.maxMp)+
+stat("기력 SP",p.sp+" / "+p.maxSp)+
+stat("금화",p.money)+
+stat("검술",p.sword)+stat("마법",p.magic)+
+stat("학문",p.knowledge)+stat("명성",p.prestige);
+$("lifeStatus").textContent=
+p.alive?(p.pending?"선택 대기 중":
+paused?"일시정지":"시간 진행 중 · "+speed+"배속"):
+"사망 · 인생 종료";
 $("event").classList.toggle("hidden",!p.pending);
 if(p.pending){
-$("eventTitle").textContent="⚡ "+p.pending.title;
+$("eventTitle").textContent=p.pending.title;
 $("eventText").textContent=p.pending.text;
+$("eventText").style.whiteSpace="pre-line";
 $("choices").innerHTML="";
-p.pending.options.forEach((o,i)=>{
+const labels=p.pending.birth?
+["이 가정에서 살아간다"]:
+["적극적으로 해결한다","신중하게 조사한다","관여하지 않는다"];
+labels.forEach((label,i)=>{
 const b=document.createElement("button");
-b.className="choice";b.textContent=o.label;
-b.onclick=()=>resolve(i);
+b.className="choice";b.textContent=label;
+b.onclick=()=>resolveEvent(i);
 $("choices").appendChild(b);
 });
 }
-$("log").innerHTML="";
-p.history.slice(0,100).forEach(e=>{
+$("history").innerHTML="";
+p.history.slice(0,100).forEach(h=>{
 const div=document.createElement("div");
-div.className="entry "+(e.tone||"");
-div.textContent=e.age+"세 "+e.month+"개월 — "+e.message;
-$("log").appendChild(div);
+div.className="log";
+div.textContent=h.age+"세 "+h.month+"개월 — "+h.text;
+$("history").appendChild(div);
 });
 }
-
-setInterval(()=>{
-if(!p||paused||!p.alive)return;
-ticks++;
-if(ticks>=Math.max(1,4/speed)){
-ticks=0;advance();
+function save(){
+if(p)localStorage.setItem("fantasy-life-v08",JSON.stringify(p));
 }
-},450);
-
+async function loadRanks(type){
 try{
-const saved=JSON.parse(localStorage.getItem("fantasy-life-save-v1"));
-if(saved&&saved.username){
-p=saved;
-paused=!!p.pending||!p.alive;
-$("birth").classList.add("hidden");
-$("game").classList.remove("hidden");
-render();
-}else reroll();
-}catch(e){reroll();}
-</script>
-</body>
-</html>`;
-
-http.createServer((req,res)=>{
-res.writeHead(200,{
-"Content-Type":"text/html; charset=utf-8",
-"Cache-Control":"no-cache"
+const r=await fetch("/api/rankings?type="+type);
+const data=await r.json();
+$("ranking").innerHTML="";
+if(!data.enabled){
+$("rankNotice").textContent=
+"아직 공용 랭킹 DB가 연결되지 않았습니다.";
+return;
+}
+$("rankNotice").textContent="실제 등록된 이용자 기록";
+const table=document.createElement("table");
+const head=document.createElement("tr");
+["순위","플레이어","캐릭터","점수"].forEach(t=>{
+const th=document.createElement("th");th.textContent=t;
+head.appendChild(th);
 });
-res.end(html);
+table.appendChild(head);
+data.rows.forEach((x,i)=>{
+const tr=document.createElement("tr");
+[i+1,x.nickname,x.character_name,x[type]].forEach(v=>{
+const td=document.createElement("td");td.textContent=v;
+tr.appendChild(td);
+});
+table.appendChild(tr);
+});
+$("ranking").appendChild(table);
+}catch(e){
+$("rankNotice").textContent="랭킹을 불러오지 못했습니다.";
+}
+}
+async function publishRank(){
+if(!p)return;
+if(!confirm("닉네임, 캐릭터 이름, 종족, 나이와 "+
+"게임 점수를 공개 랭킹에 등록할까요?"))return;
+try{
+const response=await fetch("/api/rankings",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+id:p.id,nickname:p.nickname,
+character_name:p.name,race:p.race,age:p.age,
+prestige:p.prestige,money:p.money,
+sword:p.sword,magic:p.magic
+})
+});
+const data=await response.json();
+alert(data.message||"요청이 처리되었습니다.");
+}catch(e){alert("랭킹 서버 연결에 실패했습니다.");}
+}
+setInterval(advance,1200);
+try{
+const saved=JSON.parse(localStorage.getItem("fantasy-life-v08"));
+if(saved&&saved.name){
+p=saved;homeNick=p.nickname;
+$("nickname").value=homeNick;
+paused=!!p.pending||!p.alive;
+showPage("game");render();
+}
+}catch(e){}
+loadRanks("prestige");
+</script></body></html>`;
+
+function json(res,status,data){
+  res.writeHead(status,{"Content-Type":"application/json; charset=utf-8"});
+  res.end(JSON.stringify(data));
+}
+async function handle(req,res){
+  const url=new URL(req.url,"http://localhost");
+  if(url.pathname==="/api/world"){
+    return json(res,200,world);
+  }
+  if(url.pathname==="/api/rankings"&&req.method==="GET"){
+    if(!db)return json(res,200,{enabled:false,rows:[]});
+    const allowed=["prestige","money","sword","magic"];
+    const type=allowed.includes(url.searchParams.get("type"))?
+      url.searchParams.get("type"):"prestige";
+    try{
+      const result=await db.query(
+        "SELECT nickname,character_name,race,age,prestige,money,sword,magic "+
+        "FROM fantasy_rankings ORDER BY "+type+" DESC LIMIT 20"
+      );
+      return json(res,200,{enabled:true,rows:result.rows});
+    }catch(e){
+      return json(res,503,{enabled:false,rows:[]});
+    }
+  }
+  if(url.pathname==="/api/rankings"&&req.method==="POST"){
+    if(!db)return json(res,503,{message:"DB 연결이 필요합니다."});
+    let raw="";
+    for await(const chunk of req){
+      raw+=chunk;
+      if(raw.length>10000)return json(res,413,{message:"요청이 너무 큽니다."});
+    }
+    try{
+      const d=JSON.parse(raw);
+      const str=(v,n)=>String(v||"").trim().slice(0,n);
+      const num=v=>Math.max(0,Math.min(1000000000,Math.floor(Number(v)||0)));
+      if(!str(d.nickname,24)||!str(d.character_name,80))
+        return json(res,400,{message:"이름을 확인해 주세요."});
+      const id=str(d.id,100)||randomUUID();
+      await db.query(
+        `INSERT INTO fantasy_rankings
+        (id,nickname,character_name,race,age,prestige,money,sword,magic)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT(id) DO UPDATE SET
+        nickname=$2,character_name=$3,race=$4,age=$5,
+        prestige=$6,money=$7,sword=$8,magic=$9,updated_at=NOW()`,
+        [id,str(d.nickname,24),str(d.character_name,80),
+        str(d.race,30),num(d.age),num(d.prestige),
+        num(d.money),num(d.sword),num(d.magic)]
+      );
+      return json(res,200,{message:"랭킹 기록을 등록했습니다."});
+    }catch(e){
+      return json(res,400,{message:"등록 중 오류가 발생했습니다."});
+    }
+  }
+  res.writeHead(200,{
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff"
+  });
+  res.end(html);
+}
+http.createServer((req,res)=>{
+  handle(req,res).catch(e=>{
+    console.error(e);
+    if(!res.headersSent)json(res,500,{message:"서버 오류"});
+  });
 }).listen(PORT,"0.0.0.0",()=>{
-console.log("판타지에서 살아가기 실행: "+PORT);
+  console.log("판타지에서 살아가기 실행:",PORT);
 });
